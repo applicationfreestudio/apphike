@@ -5,6 +5,15 @@
 // PUT /backup : enregistre la sauvegarde (la dernière + les 10 précédentes).
 // GET /backup : renvoie la dernière sauvegarde.
 const KEEP = 10;
+// Application Android (APK « TWA » générée par PWABuilder) : ce fichier prouve à Android que l'APK
+// et le site appartiennent au même propriétaire, ce qui retire la barre d'adresse de Chrome.
+// À remplir avec le nom de paquet et l'empreinte SHA-256 de la clé de signature de l'APK.
+const ANDROID_APP = { package: "", sha256: [] };
+const ASSETLINKS = () =>
+  ANDROID_APP.package && ANDROID_APP.sha256.length
+    ? [{ relation: ["delegate_permission/common.handle_all_urls"],
+         target: { namespace: "android_app", package_name: ANDROID_APP.package, sha256_cert_fingerprints: ANDROID_APP.sha256 } }]
+    : [];
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,PUT,OPTIONS",
@@ -23,6 +32,8 @@ export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     const url = new URL(req.url);
+    if (url.pathname === "/.well-known/assetlinks.json")
+      return new Response(JSON.stringify(ASSETLINKS()), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=300" } });
     if (url.pathname !== "/backup") return json({ error: "not found" }, 404);
     if (!env.BK || !env.TOKEN) return json({ error: "Worker mal configuré : liaison KV « BK » ou secret « TOKEN » manquant" }, 500);
     if (!same(req.headers.get("Authorization") || "", "Bearer " + env.TOKEN)) return json({ error: "unauthorized" }, 401);
