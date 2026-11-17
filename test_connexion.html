@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test des modes de connexion au tapis</title>
+<style>
+:root { --bg:#eef1f2; --panel:#fbfcfc; --line:#cfd9d8; --fg:#14201f; --muted:#566866; --accent:#0b6e6a; --ok:#1b8a4b; --ko:#c1272d; color-scheme:light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0f1716; --panel:#162221; --line:#28403d; --fg:#e6efee; --muted:#8ea5a2; --accent:#3cc4bb; --ok:#4cd98a; --ko:#ff5a5f; color-scheme:dark; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:16px; }
+main { max-width:640px; margin:0 auto; display:grid; gap:12px; }
+h1 { font-size:22px; margin:0; }
+.sub { margin:2px 0 0; color:var(--muted); font-size:14px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; display:grid; gap:10px; }
+h2 { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:0; }
+.row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+button, input, select { font:inherit; color:inherit; }
+button { font-weight:600; min-height:44px; padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:var(--panel); cursor:pointer; flex:1 1 auto; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+button:disabled { opacity:.4; cursor:not-allowed; }
+label.f { display:flex; align-items:center; gap:8px; font-size:14px; }
+input[type=number] { width:70px; min-height:40px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--bg); }
+label.ck { display:flex; gap:8px; align-items:flex-start; font-size:14px; }
+label.ck input { width:20px; height:20px; margin:1px 0 0; accent-color:var(--accent); flex:none; }
+label.ck small { display:block; color:var(--muted); font-size:12px; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
+th { color:var(--muted); font-weight:500; font-size:12px; }
+td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+tr.best td { color:var(--ok); font-weight:700; }
+.status { margin:0; font-size:14px; color:var(--muted); }
+pre { margin:0; max-height:280px; overflow:auto; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+.warn { color:var(--ko); margin:0; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Test des modes de connexion</h1>
+    <p class="sub">Essaie plusieurs façons de se connecter au tapis, plusieurs fois chacune, et compte les réussites. Seule la prise de contrôle (00) est envoyée : la bande ne bouge pas.</p>
+  </header>
+  <p id="unsupported" class="warn" hidden>Bluetooth web indisponible. Ouvrez la page dans Chrome (Android ou ordinateur).</p>
+
+  <section class="panel">
+    <h2>Modes à tester</h2>
+    <div id="modes"></div>
+    <div class="row">
+      <label class="f">Essais par mode <input id="rounds" type="number" min="1" max="20" value="5"></label>
+      <label class="f">Pause entre essais (s) <input id="gap" type="number" min="0" max="30" step="0.5" value="2"></label>
+    </div>
+    <p class="sub">Les modes sont essayés à tour de rôle (A, B, C… puis de nouveau A, B, C…), pour qu'un mauvais moment ne pénalise pas un seul mode. Comptez environ 10 s par essai.</p>
+    <div class="row">
+      <button id="pick" class="primary" type="button">1. Choisir le tapis</button>
+      <button id="run" type="button" disabled>2. Lancer les essais</button>
+      <button id="stop" type="button" disabled>Arrêter</button>
+    </div>
+    <p id="status" class="status">Fermez Kinomap, nRF Connect et App Hike avant de commencer.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Résultats</h2>
+    <table>
+      <thead><tr><th>Mode</th><th class="n">Réussis</th><th class="n">Temps moyen</th><th>Bloque à</th></tr></thead>
+      <tbody id="res"><tr><td colspan="4" class="sub">Pas encore d'essai.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Journal</h2>
+    <div class="row"><button id="copy" type="button">Copier le rapport</button></div>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var dev = null, running = false, stopAsked = false, lines = [], R = {};
+  if (!navigator.bluetooth) { $("unsupported").hidden = false; $("pick").disabled = true; }
+
+  function log(m) { lines.push(new Date().toLocaleTimeString("fr-FR") + "  " + m); $("log").textContent = lines.slice(-400).join("\n"); $("log").scrollTop = $("log").scrollHeight; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function to(p, ms, what) { return Promise.race([p, new Promise(function (_, j) { setTimeout(function () { j(new Error("bloqué : " + what)); }, ms); })]); }
+
+  /* ----- one attempt = connect, run the mode's steps, ask for control, then close ----- */
+  async function sub(svc, uuid, name, onEv) {
+    var c = await to(svc.getCharacteristic(uuid), 3000, name + " (lecture)");
+    if (onEv && !c._t) { c.addEventListener("characteristicvaluechanged", onEv); c._t = 1; }
+    await to(c.startNotifications(), 3000, name);
+    return c;
+  }
+  var cpWait = null;
+  function onCp(ev) { var dv = ev.target.value; if (cpWait && dv.byteLength >= 3 && dv.getUint8(0) === 0x80 && dv.getUint8(1) === 0) { var r = cpWait; cpWait = null; r(dv.getUint8(2)); } }
+  async function control(cp, noResp) {
+    var ans = new Promise(function (r) { cpWait = r; });
+    var b = new Uint8Array([0]);
+    var w = noResp && cp.writeValueWithoutResponse ? cp.writeValueWithoutResponse(b) : cp.writeValueWithResponse(b);
+    await to(w, 3000, "envoi 00");
+    var code = await to(ans, 3000, "réponse à 00");
+    if (code !== 1) throw new Error("00 refusé (code " + code + ")");
+  }
+  async function standard(svc, gap, noResp) {
+    var cp = await sub(svc, 0x2ad9, "point de contrôle", onCp); if (gap) await sleep(gap);
+    await sub(svc, 0x2ada, "état machine"); if (gap) await sleep(gap);
+    await sub(svc, 0x2acd, "données"); if (gap) await sleep(gap);
+    await control(cp, noResp);
+  }
+
+  var MODES = [
+    { k: "A", name: "App Hike actuel", desc: "pause 1 s, point de contrôle, état, données (pauses 0,3 s)",
+      run: async function (srv) { await sleep(1000); var svc = await to(srv.getPrimaryService(0x1826), 3000, "service FTMS"); await standard(svc, 300); } },
+    { k: "B", name: "Comme Kinomap", desc: "sans pause : statut d'entraînement, point de contrôle, état, données ; 00 sans accusé",
+      run: async function (srv) { var svc = await to(srv.getPrimaryService(0x1826), 3000, "service FTMS");
+        await sub(svc, 0x2ad3, "statut d'entraînement"); var cp = await sub(svc, 0x2ad9, "point de contrôle", onCp);
+        await sub(svc, 0x2ada, "état machine"); await sub(svc, 0x2acd, "données"); await control(cp, true); } },
+    { k: "C", name: "Données d'abord", desc: "pause 1 s, données, puis point de contrôle",
+      run: async function (srv) { await sleep(1000); var svc = await to(srv.getPrimaryService(0x1826), 3000, "service FTMS");
+        await sub(svc, 0x2acd, "données"); await sleep(300); var cp = await sub(svc, 0x2ad9, "point de contrôle", onCp); await control(cp); } },
+    { k: "D", name: "Découverte complète", desc: "liste tous les services et caractéristiques d'abord, puis comme A sans pause initiale",
+      run: async function (srv) { var all = await to(srv.getPrimaryServices(), 5000, "liste des services");
+        var svc = all.filter(function (s) { return /^00001826/.test(s.uuid); })[0]; if (!svc) throw new Error("FTMS absent");
+        await to(svc.getCharacteristics(), 3000, "liste des caractéristiques"); await standard(svc, 300); } },
+    { k: "E", name: "Attente longue", desc: "pause 3 s après la connexion, puis comme A",
+      run: async function (srv) { await sleep(3000); var svc = await to(srv.getPrimaryService(0x1826), 3000, "service FTMS"); await standard(svc, 300); } },
+    { k: "F", name: "Sans aucune pause", desc: "tout enchaîné immédiatement",
+      run: async function (srv) { var svc = await to(srv.getPrimaryService(0x1826), 3000, "service FTMS"); await standard(svc, 0); } }
+  ];
+
+  /* ----- UI ----- */
+  $("modes").innerHTML = MODES.map(function (m) {
+    return '<label class="ck"><input type="checkbox" data-k="' + m.k + '" checked><span><b>' + m.k + ". " + m.name + "</b><small>" + m.desc + "</small></span></label>";
+  }).join("");
+  function chosen() { return MODES.filter(function (m) { return document.querySelector('#modes input[data-k="' + m.k + '"]').checked; }); }
+
+  function render() {
+    var rows = MODES.filter(function (m) { return R[m.k]; }).map(function (m) {
+      var r = R[m.k], avg = r.ok ? (r.ms / r.ok / 1000).toFixed(1) + " s" : "–";
+      var where = Object.keys(r.fail).map(function (f) { return f + " ×" + r.fail[f]; }).join(", ") || "–";
+      return { m: m, r: r, html: "<td>" + m.k + ". " + m.name + '</td><td class="n">' + r.ok + " / " + r.n + '</td><td class="n">' + avg + "</td><td>" + where + "</td>" };
+    });
+    var best = rows.reduce(function (b, x) { var s = x.r.ok / x.r.n; return !b || s > b.s || (s === b.s && x.r.ok && x.r.ms / x.r.ok < b.t) ? { k: x.m.k, s: s, t: x.r.ok ? x.r.ms / x.r.ok : 1e9 } : b; }, null);
+    $("res").innerHTML = rows.length ? rows.map(function (x) { return "<tr" + (best && best.k === x.m.k && x.r.ok ? ' class="best"' : "") + ">" + x.html + "</tr>"; }).join("") : '<tr><td colspan="4" class="sub">Pas encore d\'essai.</td></tr>';
+  }
+
+  /* Close the link and wait until it is really closed (max 4 s). */
+  function drop() {
+    return new Promise(function (res) {
+      var done = false;
+      function fin() { if (done) return; done = true; dev.removeEventListener("gattserverdisconnected", fin); res(); }
+      dev.addEventListener("gattserverdisconnected", fin); setTimeout(fin, 4000);
+      try { if (dev.gatt.connected) dev.gatt.disconnect(); else fin(); } catch (e) { fin(); }
+    });
+  }
+
+  async function attempt(m, i, total) {
+    $("status").textContent = "Essai " + i + "/" + total + " : mode " + m.k + "…";
+    var t0 = Date.now(), r = R[m.k] = R[m.k] || { n: 0, ok: 0, ms: 0, fail: {} };
+    r.n++;
+    try {
+      var srv = await to(dev.gatt.connect(), 10000, "connexion");
+      await m.run(srv);
+      var ms = Date.now() - t0; r.ok++; r.ms += ms;
+      log("✓ " + m.k + " réussi en " + (ms / 1000).toFixed(1) + " s");
+    } catch (e) {
+      var why = String(e.message || e).replace(/^bloqué : /, "");
+      if (/GATT operation/i.test(why)) why = "erreur GATT (" + why.replace(/GATT operation /i, "").replace(/\.$/, "") + ")";
+      r.fail[why] = (r.fail[why] || 0) + 1;
+      log("✗ " + m.k + " échoué après " + ((Date.now() - t0) / 1000).toFixed(1) + " s : " + e.message);
+    }
+    render();
+    await drop();
+  }
+
+  $("pick").addEventListener("click", async function () {
+    try {
+      dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x1826] }, { namePrefix: "EW-TM" }, { namePrefix: "FT" }, { namePrefix: "FS" }, { namePrefix: "FitShow" }], optionalServices: [0x1826] });
+      log("Tapis choisi : " + (dev.name || dev.id));
+      $("status").textContent = "Tapis choisi : " + (dev.name || "?") + ". Lancez les essais.";
+      $("run").disabled = false;
+    } catch (e) { log("Choix annulé : " + e.message); }
+  });
+
+  $("run").addEventListener("click", async function () {
+    var ms = chosen(); if (!dev || !ms.length || running) return;
+    var rounds = Math.max(1, Math.min(20, parseInt($("rounds").value, 10) || 5));
+    var gap = Math.max(0, Math.min(30, parseFloat($("gap").value) || 0)) * 1000;
+    running = true; stopAsked = false; R = {}; render();
+    $("run").disabled = true; $("pick").disabled = true; $("stop").disabled = false;
+    log("— Début : " + rounds + " essai(s) par mode, modes " + ms.map(function (m) { return m.k; }).join(", ") + ", pause " + gap / 1000 + " s —");
+    var total = rounds * ms.length, i = 0;
+    outer: for (var k = 0; k < rounds; k++) {
+      for (var j = 0; j < ms.length; j++) {
+        if (stopAsked) break outer;
+        i++; await attempt(ms[j], i, total);
+        if (gap) await sleep(gap);
+      }
+    }
+    running = false; $("run").disabled = false; $("pick").disabled = false; $("stop").disabled = true;
+    $("status").textContent = stopAsked ? "Arrêté." : "Terminé. Le mode en vert est le plus fiable.";
+    log("— Fin —");
+  });
+  $("stop").addEventListener("click", function () { stopAsked = true; $("status").textContent = "Arrêt après l'essai en cours…"; });
+
+  $("copy").addEventListener("click", function () {
+    var tab = MODES.filter(function (m) { return R[m.k]; }).map(function (m) { var r = R[m.k]; return m.k + ". " + m.name + " : " + r.ok + "/" + r.n + (r.ok ? ", " + (r.ms / r.ok / 1000).toFixed(1) + " s" : "") + (Object.keys(r.fail).length ? " — échecs : " + Object.keys(r.fail).map(function (f) { return f + " ×" + r.fail[f]; }).join(", ") : ""); }).join("\n");
+    var t = "Test connexion tapis — " + new Date().toLocaleString("fr-FR") + "\n" + tab + "\n\n" + lines.join("\n");
+    function done() { $("copy").textContent = "Copié"; setTimeout(function () { $("copy").textContent = "Copier le rapport"; }, 1500); }
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); if (ok) done(); else log("Copie impossible : sélectionnez le journal à la main.");
+    }
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+  });
+  window.addEventListener("pagehide", function () { try { if (dev && dev.gatt.connected) dev.gatt.disconnect(); } catch (e) {} });
+})();
+</script>
+</body>
+</html>
