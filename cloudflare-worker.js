@@ -4,11 +4,12 @@
 //   - un secret nommé TOKEN (la clé secrète saisie dans App Hike).
 // PUT /backup : enregistre la sauvegarde (la dernière + les 10 précédentes).
 // GET /backup : renvoie la dernière sauvegarde.
+// /icu/api/v1/... : relais vers l'API Intervals.icu (même clé TOKEN ; identifiants Intervals.icu dans l'en-tête X-Icu-Auth).
 const KEEP = 10;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,PUT,OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization,Content-Type",
+  "Access-Control-Allow-Methods": "GET,PUT,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Icu-Auth",
   "Access-Control-Max-Age": "86400",
 };
 const json = (o, s = 200) =>
@@ -23,6 +24,19 @@ export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     const url = new URL(req.url);
+    if (url.pathname.startsWith("/icu/api/v1/")) {
+      if (!env.TOKEN) return json({ error: "Worker mal configuré : secret « TOKEN » manquant" }, 500);
+      if (!same(req.headers.get("Authorization") || "", "Bearer " + env.TOKEN)) return json({ error: "unauthorized" }, 401);
+      const ia = req.headers.get("X-Icu-Auth") || "";
+      if (!/^Basic [A-Za-z0-9+/=]+$/.test(ia)) return json({ error: "identifiants Intervals.icu manquants" }, 400);
+      if (!["GET", "PUT"].includes(req.method)) return json({ error: "method not allowed" }, 405);
+      const r = await fetch("https://intervals.icu" + url.pathname.slice(4) + url.search, {
+        method: req.method,
+        headers: { Authorization: ia, ...(req.method === "PUT" ? { "Content-Type": "application/json" } : {}) },
+        body: req.method === "PUT" ? await req.text() : undefined,
+      });
+      return new Response(await r.text(), { status: r.status, headers: { ...CORS, "Content-Type": r.headers.get("Content-Type") || "application/json" } });
+    }
     if (url.pathname !== "/backup") return json({ error: "not found" }, 404);
     if (!env.BK || !env.TOKEN) return json({ error: "Worker mal configuré : liaison KV « BK » ou secret « TOKEN » manquant" }, 500);
     if (!same(req.headers.get("Authorization") || "", "Bearer " + env.TOKEN)) return json({ error: "unauthorized" }, 401);
