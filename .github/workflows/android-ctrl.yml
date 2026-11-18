@@ -1,0 +1,25 @@
+# Compile l'APK de pilotage du tapis (android-ctrl/) et le publie dans la version « apk-ctrl » du dépôt.
+name: APK de pilotage du tapis
+on:
+  push:
+    paths: ["android-ctrl/**", ".github/workflows/android-ctrl.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Compilation
+        run: gradle -p android-ctrl assembleDebug --no-daemon
+      - name: Publication
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cp android-ctrl/app/build/outputs/apk/debug/app-debug.apk ApphikePilotage.apk
+          gh release delete apk-ctrl --yes --cleanup-tag || true
+          gh release create apk-ctrl ApphikePilotage.apk --prerelease --title "APK de pilotage du tapis" --notes "App de test de pilotage du tapis (FTMS) : connexion, mesures, consignes de vitesse et d’inclinaison, avance, pause, stop. Version du commit ${GITHUB_SHA::7}."
