@@ -1,0 +1,25 @@
+# Compile l'APK de test Bluetooth (android-test/) et le publie dans la version « apk-test » du dépôt.
+name: APK de test Bluetooth
+on:
+  push:
+    paths: ["android-test/**", ".github/workflows/android-test.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Compilation
+        run: gradle -p android-test assembleDebug --no-daemon
+      - name: Publication
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cp android-test/app/build/outputs/apk/debug/app-debug.apk ApphikeBleTest.apk
+          gh release delete apk-test --yes --cleanup-tag || true
+          gh release create apk-test ApphikeBleTest.apk --prerelease --title "APK de test Bluetooth" --notes "App de test de connexion au tapis (Care Skylink) : compare la connexion avec et sans demande de MTU 517. Version du commit ${GITHUB_SHA::7}."

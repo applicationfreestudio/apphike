@@ -8,3 +8,4 @@ cloudflare-worker.js
 node_modules
 *.md
 .dev.vars
+android-test
