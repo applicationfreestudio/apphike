@@ -93,7 +93,7 @@ class Ble {
     final Map<String, Long> lastAdv = new HashMap<>();
     final Map<String, String> names = new HashMap<>();
     boolean scanning;
-    final Runnable stopLater = () -> { if (watched.isEmpty() && chooser == null) stopScan(); };
+    final Runnable stopLater = () -> { if (watched.isEmpty() && Ble.this.chooser == null) stopScan(); };
 
     final ScanCallback scanCb = new ScanCallback() {
         @Override public void onScanResult(int type, ScanResult r) { h.post(() -> onAdv(r)); }
