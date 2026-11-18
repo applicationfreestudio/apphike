@@ -1,7 +1,9 @@
 // App Hike : mise en cache minimale pour l'installation et l'usage hors ligne.
 // Réseau d'abord : chaque nouvelle version déployée est prise dès qu'il y a du réseau.
-const C="apphike-v261117.127",F=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png","apple-touch-icon.png"];
+const C="apphike-v261118.19",F=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png","apple-touch-icon.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F.map(u=>new Request(u,{cache:"reload"})))).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{const r=e.request;const u=new URL(r.url);if(r.method!=="GET"||u.origin!==location.origin||u.pathname.endsWith("/backup")||r.headers.has("Authorization"))return;
 e.respondWith(fetch(r.url,{cache:"no-cache",credentials:"same-origin"}).then(res=>{if(res.ok){const cp=res.clone();caches.open(C).then(c=>c.put(r,cp))}return res}).catch(()=>caches.match(r).then(m=>m||(r.mode==="navigate"?caches.match("index.html"):undefined))))});
+// Notification touchée (ex. « Tapis connecté ») : ramène l'app au premier plan, ou l'ouvre.
+self.addEventListener("notificationclick",e=>{e.notification.close();e.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(L=>{for(const c of L){if("focus" in c)return c.focus()}return self.clients.openWindow?self.clients.openWindow("./"):undefined}))});
