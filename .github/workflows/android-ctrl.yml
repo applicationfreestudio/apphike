@@ -22,4 +22,4 @@ jobs:
         run: |
           cp android-ctrl/app/build/outputs/apk/debug/app-debug.apk ApphikePilotage.apk
           gh release delete apk-ctrl --yes --cleanup-tag || true
-          gh release create apk-ctrl ApphikePilotage.apk --prerelease --title "APK de pilotage du tapis" --notes "App de test de pilotage du tapis (FTMS) : connexion, mesures, consignes de vitesse et d’inclinaison, avance, pause, stop, et clone Bluetooth du tapis pour une montre. Version du commit ${GITHUB_SHA::7}."
+          gh release create apk-ctrl ApphikePilotage.apk --prerelease --title "APK de pilotage du tapis" --notes "App de test de pilotage du tapis (FTMS) : connexion, mesures, consignes de vitesse et d’inclinaison, avance, pause, stop, et clone Bluetooth basique du tapis (FTMS vitesse + inclinaison, capteur de foulée RSC) pour une montre. Version du commit ${GITHUB_SHA::7}."

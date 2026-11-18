@@ -28,16 +28,19 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Bluetooth server that clones the treadmill for other devices (a watch, an app): it advertises a Fitness Machine
- * (FTMS treadmill) and re-sends, byte for byte, the data and status messages received from the real treadmill.
- * Features and ranges are those read from the real treadmill (defaults until then).
+ * Bluetooth server that clones the treadmill for other devices (a watch, an app), in the most basic form:
+ * - FTMS treadmill: once per second, a Treadmill Data packet with only the speed and the incline (features: inclination only);
+ * - RSC "foot pod" (Running Speed and Cadence): once per second, the speed only, for watches that do not take FTMS treadmills;
+ * - Device Information (manufacturer and model), read by some watches before connecting.
  * Its control point only grants control and answers "not supported" to commands: the treadmill stays driven by this app.
  */
 @SuppressWarnings("MissingPermission")
 public class FtmsServer {
     static final UUID FTMS = MainActivity.uuid16(0x1826), FEATURE = MainActivity.uuid16(0x2ACC), DATA = MainActivity.uuid16(0x2ACD),
             TRAINING = MainActivity.uuid16(0x2AD3), SPEED_RANGE = MainActivity.uuid16(0x2AD4), INCL_RANGE = MainActivity.uuid16(0x2AD5),
-            CP = MainActivity.uuid16(0x2AD9), STATUS = MainActivity.uuid16(0x2ADA), CCCD = MainActivity.uuid16(0x2902);
+            CP = MainActivity.uuid16(0x2AD9), STATUS = MainActivity.uuid16(0x2ADA), CCCD = MainActivity.uuid16(0x2902),
+            RSC = MainActivity.uuid16(0x1814), RSC_MEAS = MainActivity.uuid16(0x2A53), RSC_FEAT = MainActivity.uuid16(0x2A54), LOCATION = MainActivity.uuid16(0x2A5D),
+            DIS = MainActivity.uuid16(0x180A), MANUF = MainActivity.uuid16(0x2A29), MODEL = MainActivity.uuid16(0x2A24);
 
     interface Listener { void log(String s); void changed(); }
 
@@ -52,15 +55,22 @@ public class FtmsServer {
     final Map<String, BluetoothDevice> clients = new HashMap<>();
     final Map<String, Set<UUID>> subscribed = new HashMap<>();
 
-    // values cloned from the real treadmill (defaults: distance, inclination, elapsed time; speed and inclination targets)
-    byte[] feature = {0x0C, 0x10, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00};
+    // basic values: features = inclination only, no target setting
+    final byte[] feature = {0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    final java.util.ArrayDeque<BluetoothGattService> toAdd = new java.util.ArrayDeque<>();
+    boolean nameInMain = true;
+    Double sp, inc;      // last measured speed (km/h) and incline (%)
+    long measAt;
+    final Runnable pulse = new Runnable() { @Override public void run() { if (!on) return; sendMeasures(); h.postDelayed(this, 1000); } };
     byte[] speedRange = {(byte) 100, 0, (byte) 0x40, 0x06, 10, 0};       // 1.00 – 16.00 km/h, step 0.1
     byte[] inclRange = {0, 0, (byte) 240, 0, 10, 0};                       // 0 – 24.0 %, step 1.0
     byte[] training = {0x00, 0x01};
 
     final AdvertiseCallback advCb = new AdvertiseCallback() {
         @Override public void onStartSuccess(AdvertiseSettings s) { h.post(() -> { advertising = true; error = ""; L.log("clone : émission en cours sous le nom « " + name() + " »"); L.changed(); }); }
-        @Override public void onStartFailure(int code) { h.post(() -> { advertising = false; error = "émission refusée par Android (code " + code + ")"; L.log("✗ clone : " + error); L.changed(); }); }
+        @Override public void onStartFailure(int code) { h.post(() -> {
+            if (code == ADVERTISE_FAILED_DATA_TOO_LARGE && nameInMain && on) { nameInMain = false; L.log("clone : nom du téléphone trop long pour l'annonce, placé dans la réponse"); advertise(); return; }
+            advertising = false; error = "émission refusée par Android (code " + code + ")"; L.log("✗ clone : " + error); L.changed(); }); }
     };
 
     FtmsServer(Context c, Listener l) { ctx = c; L = l; }
@@ -92,7 +102,17 @@ public class FtmsServer {
         s.addCharacteristic(chr(INCL_RANGE, BluetoothGattCharacteristic.PROPERTY_READ, false));
         s.addCharacteristic(chr(CP, BluetoothGattCharacteristic.PROPERTY_WRITE | BluetoothGattCharacteristic.PROPERTY_INDICATE, true));
         s.addCharacteristic(chr(STATUS, BluetoothGattCharacteristic.PROPERTY_NOTIFY, true));
-        server.addService(s);   // advertising starts in onServiceAdded
+        BluetoothGattService r = new BluetoothGattService(RSC, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        r.addCharacteristic(chr(RSC_MEAS, BluetoothGattCharacteristic.PROPERTY_NOTIFY, true));
+        r.addCharacteristic(chr(RSC_FEAT, BluetoothGattCharacteristic.PROPERTY_READ, false));
+        r.addCharacteristic(chr(LOCATION, BluetoothGattCharacteristic.PROPERTY_READ, false));
+        BluetoothGattService di = new BluetoothGattService(DIS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        di.addCharacteristic(chr(MANUF, BluetoothGattCharacteristic.PROPERTY_READ, false));
+        di.addCharacteristic(chr(MODEL, BluetoothGattCharacteristic.PROPERTY_READ, false));
+        toAdd.clear(); toAdd.add(s); toAdd.add(r); toAdd.add(di);
+        nameInMain = true;
+        server.addService(toAdd.poll());   // the next services, then advertising, follow in onServiceAdded
+        h.postDelayed(pulse, 1000);
         L.changed();
     }
 
@@ -110,15 +130,15 @@ public class FtmsServer {
         AdvertiseSettings set = new AdvertiseSettings.Builder().setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH).setConnectable(true).setTimeout(0).build();
         // FTMS service data: "fitness machine available", type = treadmill
-        AdvertiseData data = new AdvertiseData.Builder().setIncludeDeviceName(false).addServiceUuid(new ParcelUuid(FTMS))
+        AdvertiseData data = new AdvertiseData.Builder().setIncludeDeviceName(nameInMain).addServiceUuid(new ParcelUuid(FTMS)).addServiceUuid(new ParcelUuid(RSC))
                 .addServiceData(new ParcelUuid(FTMS), new byte[]{0x01, 0x01, 0x00}).build();
-        AdvertiseData resp = new AdvertiseData.Builder().setIncludeDeviceName(true).build();
+        AdvertiseData resp = new AdvertiseData.Builder().setIncludeDeviceName(!nameInMain).build();
         adv.startAdvertising(set, data, resp, advCb);
     }
 
     void stop() {
         if (!on) return;
-        on = false; advertising = false;
+        on = false; advertising = false; h.removeCallbacks(pulse);
         try { if (adv != null) adv.stopAdvertising(advCb); } catch (Exception ignored) { }
         if (server != null) {
             for (BluetoothDevice d : clients.values()) { try { server.cancelConnection(d); } catch (Exception ignored) { } }
@@ -130,11 +150,21 @@ public class FtmsServer {
     }
 
     // ---- values coming from the real treadmill ----
-    void setFeature(byte[] v) { if (v != null && v.length >= 8) feature = v.clone(); }
+    void setFeature(byte[] v) { }   // the clone keeps its basic features
     void setSpeedRange(byte[] v) { if (v != null && v.length >= 6) speedRange = v.clone(); }
     void setInclRange(byte[] v) { if (v != null && v.length >= 6) inclRange = v.clone(); }
-    void data(byte[] v) { notifyAll(DATA, v, false); }
-    void status(byte[] v) { notifyAll(STATUS, v, false); }
+    /** Measured speed (km/h) and incline (%) from the real treadmill; sent once per second by sendMeasures. */
+    void measures(Double s, Double i) { sp = s; inc = i; measAt = android.os.SystemClock.elapsedRealtime(); }
+    void data(byte[] v) { }
+    void status(byte[] v) { }
+
+    void sendMeasures() {
+        if (sp == null || android.os.SystemClock.elapsedRealtime() - measAt > 3000) return;   // nothing sent without a live treadmill
+        int s = (int) Math.round(sp * 100), i = (int) Math.round((inc != null ? inc : 0) * 10), ramp = (int) Math.round(Math.toDegrees(Math.atan((inc != null ? inc : 0) / 100.0)) * 10);
+        notifyAll(DATA, new byte[]{0x08, 0x00, (byte) s, (byte) (s >> 8), (byte) i, (byte) (i >> 8), (byte) ramp, (byte) (ramp >> 8)}, false);
+        int ms = (int) Math.round(sp / 3.6 * 256);   // RSC speed: 1/256 m/s; flags 0 = walking, no stride length, no distance; cadence unknown (0)
+        notifyAll(RSC_MEAS, new byte[]{0x00, (byte) ms, (byte) (ms >> 8), 0x00}, false);
+    }
     void belt(boolean running) {
         byte[] t = {0x00, (byte) (running ? 0x0D : 0x01)};   // training status: manual mode / idle
         if (!Arrays.equals(t, training)) { training = t; notifyAll(TRAINING, t, false); }
@@ -142,9 +172,10 @@ public class FtmsServer {
 
     void notifyAll(UUID u, byte[] v, boolean indicate) {
         if (!on || server == null || v == null) return;
-        BluetoothGattService s = server.getService(FTMS);
+        BluetoothGattService s = server.getService(u.equals(RSC_MEAS) ? RSC : FTMS);
         if (s == null) return;
         BluetoothGattCharacteristic c = s.getCharacteristic(u);
+        if (c == null) return;
         for (Map.Entry<String, BluetoothDevice> e : clients.entrySet()) {
             Set<UUID> sub = subscribed.get(e.getKey());
             if (sub == null || !sub.contains(u)) continue;
@@ -165,11 +196,15 @@ public class FtmsServer {
         if (u.equals(SPEED_RANGE)) return speedRange;
         if (u.equals(INCL_RANGE)) return inclRange;
         if (u.equals(TRAINING)) return training;
+        if (u.equals(RSC_FEAT)) return new byte[]{0x00, 0x00};
+        if (u.equals(LOCATION)) return new byte[]{0x00};   // "other"
+        if (u.equals(MANUF)) return "App Hike".getBytes();
+        if (u.equals(MODEL)) return "Treadmill".getBytes();
         return new byte[0];
     }
 
     final BluetoothGattServerCallback cb = new BluetoothGattServerCallback() {
-        @Override public void onServiceAdded(int st, BluetoothGattService s) { h.post(() -> { if (!on) return; if (st == 0) advertise(); else { error = "service FTMS refusé (statut " + st + ")"; L.log("✗ clone : " + error); L.changed(); } }); }
+        @Override public void onServiceAdded(int st, BluetoothGattService s) { h.post(() -> { if (!on) return; if (st == 0) { if (!toAdd.isEmpty()) server.addService(toAdd.poll()); else advertise(); } else { error = "service FTMS refusé (statut " + st + ")"; L.log("✗ clone : " + error); L.changed(); } }); }
 
         @Override public void onConnectionStateChange(BluetoothDevice d, int st, int ns) {
             h.post(() -> {
@@ -183,6 +218,7 @@ public class FtmsServer {
 
         @Override public void onCharacteristicReadRequest(BluetoothDevice d, int id, int off, BluetoothGattCharacteristic c) {
             byte[] v = readValue(c.getUuid());
+            if (off == 0) h.post(() -> L.log("clone : lecture " + String.format("0x%04x", (int) (c.getUuid().getMostSignificantBits() >>> 32) & 0xffff) + " par " + d.getAddress()));
             byte[] part = off >= v.length ? new byte[0] : Arrays.copyOfRange(v, off, v.length);
             try { server.sendResponse(d, id, BluetoothGatt.GATT_SUCCESS, off, part); } catch (Exception ignored) { }
         }
@@ -201,6 +237,7 @@ public class FtmsServer {
                 Set<UUID> sub = subscribed.get(d.getAddress());
                 if (sub == null) { sub = new HashSet<>(); subscribed.put(d.getAddress(), sub); }
                 if (en) sub.add(u); else sub.remove(u);
+                L.log("clone : " + d.getAddress() + (en ? " s'abonne à " : " se désabonne de ") + String.format("0x%04x", (int) (u.getMostSignificantBits() >>> 32) & 0xffff));
                 if (!clients.containsKey(d.getAddress())) clients.put(d.getAddress(), d);
                 L.changed();
             });

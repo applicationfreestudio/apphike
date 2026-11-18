@@ -438,6 +438,7 @@ public class MainActivity extends Activity {
         if (sp != null) mSp = sp;
         if (inc != null) mInc = inc;
         if (mSp == null) return;
+        clone.measures(mSp, mInc);
         clone.belt(mSp >= 0.05);
         double s = mSp, in = mInc != null ? mInc : 0;
 
