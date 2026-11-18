@@ -1,0 +1,39 @@
+# Compile l'APK App Hike (android-app/) et le publie dans la version « apk-app » du dépôt.
+# La clé de signature est créée une fois puis gardée dans le cache des Actions : chaque nouvel APK s'installe
+# par-dessus le précédent sans perdre les données. Si le cache disparaît (7 jours sans compilation), une nouvelle clé
+# est créée et il faut désinstaller l'ancienne app avant d'installer la nouvelle (sauvegarde Cloudflare d'abord).
+name: APK App Hike
+on:
+  push:
+    paths: ["android-app/**", ".github/workflows/android-app.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Clé de signature (cache)
+        id: key
+        uses: actions/cache@v4
+        with: { path: ~/apphike-key, key: apphike-signing-key-v1 }
+      - name: Création de la clé si absente
+        if: steps.key.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/apphike-key
+          keytool -genkeypair -keystore ~/apphike-key/apphike.jks -alias apphike -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass apphike-local -keypass apphike-local -dname "CN=App Hike, O=Free Studio, C=FR"
+      - name: Compilation
+        run: APK_KEYSTORE=$HOME/apphike-key/apphike.jks gradle -p android-app assembleDebug --no-daemon
+      - name: Publication
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk AppHike.apk
+          FP=$(keytool -list -keystore ~/apphike-key/apphike.jks -storepass apphike-local -alias apphike | grep -o 'SHA-256.*\|SHA256.*' | head -1)
+          gh release delete apk-app --yes --cleanup-tag || true
+          gh release create apk-app AppHike.apk --title "App Hike pour Android" --notes "App Hike en application Android : la page App Hike (Cloudflare) avec le Bluetooth natif pour le tapis et la ceinture cardio. Version 1.0.${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}. Clé de signature : ${FP:-?} (nouvelle clé : ${{ steps.key.outputs.cache-hit != 'true' }})."

@@ -10,3 +10,4 @@ node_modules
 .dev.vars
 android-test
 android-ctrl
+android-app
