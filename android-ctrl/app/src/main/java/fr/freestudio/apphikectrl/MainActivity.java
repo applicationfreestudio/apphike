@@ -19,6 +19,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.os.Build;
@@ -50,9 +51,11 @@ import java.util.UUID;
  * If the belt stops while the app was asking it to move (button on the treadmill, safety key, speed at 0 for 2 s),
  * the app switches to Pause and keeps as targets the last stable speed and incline, sent again on Avance.
  * A speed or incline changed on the treadmill while it runs becomes the new target.
+ * Option "clone": a Bluetooth server re-sends the treadmill as an FTMS treadmill for a watch or another app (FtmsServer).
  */
 public class MainActivity extends Activity {
-    static final UUID FTMS = uuid16(0x1826), CP = uuid16(0x2AD9), STATUS = uuid16(0x2ADA), DATA = uuid16(0x2ACD), CCCD = uuid16(0x2902);
+    static final UUID FTMS = uuid16(0x1826), CP = uuid16(0x2AD9), STATUS = uuid16(0x2ADA), DATA = uuid16(0x2ACD), CCCD = uuid16(0x2902),
+            FEATURE = uuid16(0x2ACC), SPEED_RANGE = uuid16(0x2AD4), INCL_RANGE = uuid16(0x2AD5);
     static final int STEP_TIMEOUT_MS = 8000, RETRY_MS = 1500, ANSWER_MS = 2500;
     static final int OFF = 0, SEARCH = 1, CONNECTING = 2, READY = 3;
     static final int STOP = 0, RUN = 1, PAUSE = 2;
@@ -69,7 +72,12 @@ public class MainActivity extends Activity {
     boolean want, setupDone, skylink;
     int conn = OFF, mode = STOP, tries;
     String step = "", tmMsg = "—", controlMsg = "";
-    final List<BluetoothGattCharacteristic> subs = new ArrayList<>();
+    final List<BluetoothGattCharacteristic> subs = new ArrayList<>(), reads = new ArrayList<>();
+    final Runnable readTimeout = () -> { if (!reads.isEmpty()) { log("lecture " + rname(reads.get(0).getUuid()) + " : pas de réponse, ignorée"); reads.remove(0); } readNext(); };
+    FtmsServer clone;
+    SharedPreferences prefs;
+    TextView tvClone;
+    Button bClone;
 
     // ranges and targets
     double sMin = 1, sMax = 16, iMin = 0, iMax = 24;
@@ -190,6 +198,11 @@ public class MainActivity extends Activity {
         });
         btn(or, "Partager", v -> startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, journal.toString()), "Partager le journal")));
 
+        label(root, "Émettre comme un tapis (clone pour une montre ou une autre app)");
+        LinearLayout kr = row(root);
+        bClone = btn(kr, "Activer le clone", v -> setClone(!clone.on));
+        tvClone = tv(root, 13, false);
+
         label(root, "Journal");
         logScroll = new ScrollView(this);
         tvLog = new TextView(this);
@@ -202,23 +215,29 @@ public class MainActivity extends Activity {
 
         adapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
         log("Pilotage du tapis · " + new SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(new Date()) + " · Android " + Build.VERSION.RELEASE + " · " + Build.MODEL);
+        prefs = getSharedPreferences("pilotage", MODE_PRIVATE);
+        clone = new FtmsServer(this, new FtmsServer.Listener() {
+            @Override public void log(String s) { MainActivity.this.log(s); }
+            @Override public void changed() { ui(); }
+        });
         ui();
-        if (hasPermissions()) connect(); else askPermissions();
+        if (hasPermissions()) { connect(); if (prefs.getBoolean("clone", false)) clone.start(); } else askPermissions();
     }
 
     boolean hasPermissions() {
         if (Build.VERSION.SDK_INT >= 31)
-            return checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+            return checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+                    && checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED;
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     void askPermissions() {
-        if (Build.VERSION.SDK_INT >= 31) requestPermissions(new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT}, 1);
+        if (Build.VERSION.SDK_INT >= 31) requestPermissions(new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE}, 1);
         else requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
     }
 
     @Override public void onRequestPermissionsResult(int rc, String[] p, int[] r) {
-        if (hasPermissions()) connect(); else { tmMsg = "Autorisation Bluetooth refusée : accorde « Appareils à proximité » dans les réglages de l'app."; ui(); }
+        if (hasPermissions()) { connect(); if (prefs.getBoolean("clone", false)) clone.start(); } else { tmMsg = "Autorisation Bluetooth refusée : accorde « Appareils à proximité » dans les réglages de l'app."; ui(); }
     }
 
     static String f1(double v) { return String.format(Locale.FRANCE, "%.1f", v); }
@@ -252,11 +271,27 @@ public class MainActivity extends Activity {
         tvTSp.setText(f1(tSp) + " km/h");
         tvTInc.setText(f1(tInc) + " %");
         bConn.setText(want ? "Déconnecter" : "Connecter");
+        if (clone != null) {
+            bClone.setText(clone.on ? "Désactiver le clone" : "Activer le clone");
+            String cs;
+            if (!clone.on) cs = clone.error.isEmpty() ? "Clone désactivé." : "Clone arrêté : " + clone.error;
+            else if (!clone.advertising) cs = clone.error.isEmpty() ? "Démarrage de l'émission…" : "Problème : " + clone.error;
+            else cs = "● Émet comme un tapis sous le nom « " + clone.name() + " »" + (clone.clientCount() > 0 ? " · connecté : " + clone.clientNames() : " · aucun appareil connecté") + (conn == READY ? "" : " · en attente du vrai tapis");
+            tvClone.setText(cs);
+            tvClone.setTextColor(clone.on && clone.advertising ? (clone.clientCount() > 0 ? 0xFF43A047 : 0xFFFB8C00) : 0xFF9E9E9E);
+        }
     }
 
     final Runnable tick = new Runnable() { @Override public void run() { ui(); h.postDelayed(this, 1000); } };
     @Override protected void onResume() { super.onResume(); h.post(tick); }
     @Override protected void onPause() { h.removeCallbacks(tick); super.onPause(); }
+
+    void setClone(boolean on) {
+        if (on && !hasPermissions()) { askPermissions(); return; }
+        prefs.edit().putBoolean("clone", on).apply();
+        if (on) clone.start(); else clone.stop();
+        ui();
+    }
 
     // ---------------- targets ----------------
     double cap(double inc) { return skylink ? (inc < 0 ? 6 : inc <= 15 ? 13 : inc <= 26 ? 8 : 6) : sMax; }
@@ -399,9 +434,11 @@ public class MainActivity extends Activity {
         if (sp == null && inc == null) return;
         long t = SystemClock.elapsedRealtime();
         nData++; lastDataAt = t;
+        clone.data(v);
         if (sp != null) mSp = sp;
         if (inc != null) mInc = inc;
         if (mSp == null) return;
+        clone.belt(mSp >= 0.05);
         double s = mSp, in = mInc != null ? mInc : 0;
 
         // stability of the measures (for adopting a change made on the treadmill and for the targets kept at pause)
@@ -432,6 +469,7 @@ public class MainActivity extends Activity {
 
     void onStatus(byte[] v) {
         if (v == null || v.length < 1) return;
+        clone.status(v);
         int c = v[0] & 0xff, p = v.length > 1 ? v[1] & 0xff : 0;
         boolean mine = SystemClock.elapsedRealtime() - lastOwn < 3000;
         String m;
@@ -526,7 +564,8 @@ public class MainActivity extends Activity {
     void closeGatt() {
         h.removeCallbacks(watchdog);
         h.removeCallbacks(pendTimeout);
-        setupDone = false; pend = null; queue.clear(); cpChar = null;
+        h.removeCallbacks(readTimeout);
+        setupDone = false; pend = null; queue.clear(); cpChar = null; reads.clear();
         BluetoothGatt g = gatt;
         gatt = null;
         if (g != null) { try { g.disconnect(); } catch (Exception ignored) { } try { g.close(); } catch (Exception ignored) { } }
@@ -554,10 +593,10 @@ public class MainActivity extends Activity {
     @SuppressWarnings("MissingPermission")
     void subscribeNext(BluetoothGatt g) {
         if (subs.isEmpty()) {
-            setupDone = true;
-            stepTo("prise de contrôle");
-            queue.addFirst(new Cmd("Prise de contrôle", new byte[]{0x00}));
-            next();
+            BluetoothGattService s = g.getService(FTMS);
+            reads.clear();
+            for (UUID u : new UUID[]{FEATURE, SPEED_RANGE, INCL_RANGE}) if (s != null && s.getCharacteristic(u) != null) reads.add(s.getCharacteristic(u));
+            readNext();
             return;
         }
         BluetoothGattCharacteristic c = subs.get(0);
@@ -571,6 +610,43 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) sent = g.writeDescriptor(d, val) == 0;
         else { d.setValue(val); sent = g.writeDescriptor(d); }
         if (!sent) fail("abonnement " + nm + " refusé par Android");
+    }
+
+    static String rname(UUID u) { return u.equals(FEATURE) ? "fonctions du tapis" : u.equals(SPEED_RANGE) ? "plage de vitesse" : "plage d'inclinaison"; }
+
+    /** Reads the treadmill's features and ranges (for the clone and the limits), then asks for control. */
+    @SuppressWarnings("MissingPermission")
+    void readNext() {
+        h.removeCallbacks(readTimeout);
+        if (gatt == null) return;
+        if (reads.isEmpty()) {
+            setupDone = true;
+            stepTo("prise de contrôle");
+            queue.addFirst(new Cmd("Prise de contrôle", new byte[]{0x00}));
+            next();
+            return;
+        }
+        stepTo("lecture " + rname(reads.get(0).getUuid()));
+        if (!gatt.readCharacteristic(reads.get(0))) { reads.remove(0); readNext(); return; }
+        h.postDelayed(readTimeout, 3000);
+    }
+
+    void onRead(UUID u, byte[] v, int st) {
+        if (reads.isEmpty() || !reads.get(0).getUuid().equals(u)) return;
+        reads.remove(0);
+        if (st == 0 && v != null) {
+            if (u.equals(FEATURE)) clone.setFeature(v);
+            else if (u.equals(SPEED_RANGE) && v.length >= 4) {
+                clone.setSpeedRange(v);
+                if (!skylink) { sMin = u16(v, 0) / 100.0; sMax = u16(v, 2) / 100.0; }
+                log("plage de vitesse du tapis : " + f1(u16(v, 0) / 100.0) + "–" + f1(u16(v, 2) / 100.0) + " km/h" + (skylink ? " (limites fixes Care Skylink gardées)" : ""));
+            } else if (u.equals(INCL_RANGE) && v.length >= 4) {
+                clone.setInclRange(v);
+                if (!skylink) { iMin = ((short) u16(v, 0)) / 10.0; iMax = ((short) u16(v, 2)) / 10.0; }
+                log("plage d'inclinaison du tapis : " + f1(((short) u16(v, 0)) / 10.0) + "–" + f1(((short) u16(v, 2)) / 10.0) + " %" + (skylink ? " (limites fixes Care Skylink gardées)" : ""));
+            }
+        }
+        readNext();
     }
 
     final BluetoothGattCallback cb = new BluetoothGattCallback() {
@@ -607,6 +683,18 @@ public class MainActivity extends Activity {
             });
         }
 
+        @Override public void onCharacteristicRead(BluetoothGatt g, BluetoothGattCharacteristic c, byte[] v, int st) {
+            byte[] copy = v == null ? null : v.clone();
+            h.post(() -> { if (g == gatt) onRead(c.getUuid(), copy, st); });
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override public void onCharacteristicRead(BluetoothGatt g, BluetoothGattCharacteristic c, int st) {
+            if (Build.VERSION.SDK_INT >= 33) return;
+            byte[] copy = c.getValue() == null ? null : c.getValue().clone();
+            h.post(() -> { if (g == gatt) onRead(c.getUuid(), copy, st); });
+        }
+
         @Override public void onCharacteristicWrite(BluetoothGatt g, BluetoothGattCharacteristic c, int st) {
             h.post(() -> {
                 if (g != gatt || st == 0 || pend == null) return;
@@ -636,5 +724,5 @@ public class MainActivity extends Activity {
         }
     };
 
-    @Override protected void onDestroy() { want = false; stopScan(); closeGatt(); super.onDestroy(); }
+    @Override protected void onDestroy() { want = false; stopScan(); closeGatt(); if (clone != null) clone.stop(); super.onDestroy(); }
 }
