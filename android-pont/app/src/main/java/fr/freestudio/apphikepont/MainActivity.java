@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
                 synchronized (PontService.LOG) { for (String l : PontService.LOG) b.append(l).append('\n'); }
                 st.put("log", b.toString());
                 st.put("perm", btGranted());
+                st.put("logOn", PontService.LOG_ON);
                 return st.toString();
             } catch (Exception e) { return "{}"; }
         }
@@ -101,6 +102,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void share(String text) {
             h.post(() -> startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Partager le journal")));
         }
+        @JavascriptInterface public void logOn(boolean on) { PontService.LOG_ON = on; getSharedPreferences("journal", MODE_PRIVATE).edit().putBoolean("on", on).apply(); }
         @JavascriptInterface public void clearLog() { synchronized (PontService.LOG) { PontService.LOG.clear(); } }
         @JavascriptInterface public void perms() { h.post(MainActivity.this::start); }
     }
@@ -108,6 +110,7 @@ public class MainActivity extends Activity {
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        PontService.loadLogOn(this);
         wp = getSharedPreferences("watch", MODE_PRIVATE);
         bars();
         web = new WebView(this);

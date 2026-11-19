@@ -42,7 +42,12 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
     boolean page;
     final Runnable releaseAll = () -> { if (!page) { log("page absente depuis 10 s : appareils libérés"); ble.closeAll(); ble.watched.clear(); ble.filters = null; changed(); } };
 
+    /** Journal recording on/off (saved in the "journal" preferences, on by default). */
+    static volatile boolean LOG_ON = true;
+    static void loadLogOn(android.content.Context c) { LOG_ON = c.getSharedPreferences("journal", MODE_PRIVATE).getBoolean("on", true); }
+
     static void addLog(String s) {
+        if (!LOG_ON) return;
         synchronized (LOG) {
             LOG.add(new SimpleDateFormat("HH:mm:ss", Locale.FRANCE).format(new Date()) + "  " + s);
             if (LOG.size() > 400) LOG.subList(0, 100).clear();
@@ -94,6 +99,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
 
     @Override public void onCreate() {
         super.onCreate();
+        loadLogOn(this);
         instance = this;
         NotificationManager nm = getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel("pont", "App Hike Connexion", NotificationManager.IMPORTANCE_LOW));
