@@ -73,13 +73,12 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 <div class="fl"><span>Inclinaison de test</span><span class="stp"><button type="button" data-step="tInc" data-d="-1">−</button><b id="tIncv"></b><button type="button" data-step="tInc" data-d="1">+</button></span></div>
 </details>
 
-<details><summary>Profils Bluetooth présentés</summary>
+<details><summary>Profils annoncés et envoyés</summary>
 <label class="ck"><input type="checkbox" data-k="rsc"><span>Capteur de foulée (RSC, 0x1814)<small>accepté par la plupart des montres : vitesse, cadence, distance</small></span></label>
 <label class="ck"><input type="checkbox" data-k="csc"><span>Capteur de vitesse vélo (CSC, 0x1816)<small>vitesse calculée à partir de tours de roue</small></span></label>
 <label class="ck"><input type="checkbox" data-k="hr"><span>Capteur cardio (HRS, 0x180D)<small>fréquence de la ceinture (ou de test) : accepté par toutes les montres, utile pour vérifier que la montre voit le téléphone</small></span></label>
 <label class="ck"><input type="checkbox" data-k="ftms"><span>Tapis de course (FTMS, 0x1826)<small>vitesse et inclinaison, si la montre gère les tapis</small></span></label>
-<label class="ck"><input type="checkbox" data-k="dis"><span>Informations de l’appareil (0x180A)<small>fabricant, modèle, version</small></span></label>
-<label class="ck"><input type="checkbox" data-k="bas"><span>Batterie (0x180F)<small>certaines montres la lisent avant d’accepter un capteur</small></span></label>
+<p>Le capteur garde toujours la même structure (tous les services, plus infos appareil et batterie) : seuls les profils cochés sont annoncés et reçoivent des valeurs. Ainsi la montre retrouve le capteur qu’elle a mémorisé.</p>
 </details>
 
 <details><summary>Annonce Bluetooth</summary>
@@ -98,14 +97,11 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 <label class="ck"><input type="checkbox" data-k="dist"><span>Distance totale</span></label>
 <div class="fl"><span>Course ou marche</span><select data-k="running"><option value="auto">auto (course dès 7,5 km/h)</option><option value="non">toujours marche</option><option value="oui">toujours course</option></select></div>
 <div class="fl"><span>Position du capteur</span><select data-k="loc"><option value="0">autre</option><option value="1">dessus de la chaussure</option><option value="2">dans la chaussure</option><option value="3">hanche</option><option value="5">talon</option></select></div>
-<label class="ck"><input type="checkbox" data-k="scCp"><span>Point de contrôle (calibration)<small>présent sur certains capteurs du commerce</small></span></label>
 </details>
 
 <details><summary>Tapis (FTMS)</summary>
 <div class="fl"><span>Données envoyées</span><select data-k="ftFields"><option value="vitesse">vitesse</option><option value="vitesse+inclinaison">vitesse + inclinaison</option><option value="vitesse+inclinaison+distance">+ distance</option><option value="complet">+ distance, D+, temps</option></select></div>
-<label class="ck"><input type="checkbox" data-k="ftCp"><span>Point de contrôle et état machine</span></label>
-<label class="ck"><input type="checkbox" data-k="ftRanges"><span>Plages de vitesse et d’inclinaison</span></label>
-<label class="ck"><input type="checkbox" data-k="ftTrain"><span>État d’entraînement</span></label>
+
 </details>
 
 <details><summary>Vélo (CSC)</summary>
@@ -113,7 +109,7 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 </details>
 
 <details><summary>Sécurité et rythme</summary>
-<label class="ck"><input type="checkbox" data-k="secure"><span>Exiger le chiffrement<small>déclenche un appairage Bluetooth avec la montre</small></span></label>
+<label class="ck"><input type="checkbox" data-k="secure"><span>Exiger le chiffrement (appairage)<small>la montre s’appaire au téléphone et peut ensuite le retrouver même si son adresse Bluetooth change ; refais l’association après l’avoir coché</small></span></label>
 <div class="fl"><span>Envoi des données</span><select data-k="period"><option value="250">4 fois par seconde</option><option value="500">2 fois par seconde</option><option value="1000">1 fois par seconde</option><option value="2000">toutes les 2 s</option></select></div>
 </details>
 </section>

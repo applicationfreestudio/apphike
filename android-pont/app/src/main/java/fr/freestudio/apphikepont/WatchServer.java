@@ -109,17 +109,35 @@ public class WatchServer {
     void setOptions(JSONObject n) {
         JSONObject d = defaults();
         try { for (java.util.Iterator<String> it = n.keys(); it.hasNext(); ) { String k = it.next(); d.put(k, n.get(k)); } } catch (Exception ignored) { }
-        boolean restart = on && structural(o, d);
+        boolean gatt = on && changed(o, d, "secure"), ad = on && changed(o, d, "rsc", "hr", "ftms", "csc", "name", "nameMain", "advAll", "txHigh", "advFast");
         o = d;
-        if (restart) { host.log("montre : options changées, émission relancée"); stop(); h.postDelayed(this::start, 600); }
+        if (gatt) { host.log("montre : chiffrement changé, capteur reconstruit (refais l'association sur la montre)"); stop(); h.postDelayed(this::start, 600); }
+        else if (ad) { host.log("montre : annonce mise à jour (le capteur garde la même structure)"); restartAdvertising(); }
         host.changed();
     }
 
-    /** Options that change the services or the advertising (need a restart), as opposed to the values sent. */
-    static boolean structural(JSONObject a, JSONObject b) {
-        for (String k : new String[]{"rsc", "hr", "ftms", "csc", "dis", "bas", "name", "nameMain", "advAll", "txHigh", "advFast", "secure", "scCp", "ftCp", "ftRanges", "ftTrain", "ftFields", "stride", "dist", "loc"})
-            if (!String.valueOf(a.opt(k)).equals(String.valueOf(b.opt(k)))) return true;
+    static boolean changed(JSONObject a, JSONObject b, String... keys) {
+        for (String k : keys) if (!String.valueOf(a.opt(k)).equals(String.valueOf(b.opt(k)))) return true;
         return false;
+    }
+
+    void restartAdvertising() {
+        try { if (adv != null) adv.stopAdvertising(advCb); } catch (Exception ignored) { }
+        advertising = false;
+        applyName();
+        h.postDelayed(() -> { if (on) { nameInMain = o.optBoolean("nameMain", true); advertise(); } }, 300);
+    }
+
+    /** Custom Bluetooth name of the phone during the emission (restored at stop). */
+    void applyName() {
+        BluetoothAdapter a = bm.getAdapter();
+        String nm = o.optString("name", "").trim();
+        if (nm.isEmpty()) { if (oldName != null) { try { a.setName(oldName); host.log("montre : nom Bluetooth rétabli « " + oldName + " »"); } catch (Exception ignored) { } oldName = null; } return; }
+        if (nm.equals(a.getName())) return;
+        if (oldName == null) oldName = a.getName();
+        boolean ok = false;
+        try { ok = a.setName(nm); } catch (Exception e) { host.log("montre : changement de nom refusé (" + e.getMessage() + ")"); }
+        host.log("montre : nom Bluetooth du téléphone « " + nm + " » " + (ok ? "appliqué (rétabli à l'arrêt)" : "refusé par Android"));
     }
 
     Integer beltHr; long hrAt;
@@ -146,59 +164,45 @@ public class WatchServer {
         if (!o.optBoolean("rsc") && !o.optBoolean("ftms") && !o.optBoolean("csc") && !o.optBoolean("hr")) { error = "aucun profil coché"; host.changed(); return; }
         on = true; error = ""; sent = 0; sentFail = 0; startAt = SystemClock.elapsedRealtime(); dist = 0; elev = 0; wheelRevs = 0;
         try { ctx.registerReceiver(bond, new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)); } catch (Exception ignored) { }
-        String nm = o.optString("name", "").trim();
-        if (!nm.isEmpty() && !nm.equals(a.getName())) {
-            oldName = a.getName();
-            boolean ok = false;
-            try { ok = a.setName(nm); } catch (Exception e) { host.log("montre : changement de nom refusé (" + e.getMessage() + ")"); }
-            host.log("montre : nom Bluetooth du téléphone « " + nm + " » " + (ok ? "appliqué (rétabli à l'arrêt)" : "refusé par Android"));
-        }
+        applyName();
         server = bm.openGattServer(ctx, cb);
         if (server == null) { on = false; error = "serveur Bluetooth impossible à ouvrir"; host.log("✗ montre : " + error); host.changed(); return; }
         toAdd.clear();
         boolean sec = o.optBoolean("secure");
-        if (o.optBoolean("rsc")) {
-            BluetoothGattService s = new BluetoothGattService(RSC, BluetoothGattService.SERVICE_TYPE_PRIMARY);
-            s.addCharacteristic(chr(RSC_MEAS, P_NOTIFY, sec));
-            s.addCharacteristic(chr(RSC_FEAT, P_READ, sec));
-            s.addCharacteristic(chr(LOCATION, P_READ, sec));
-            if (o.optBoolean("scCp")) s.addCharacteristic(chr(SC_CP, P_WRITE | P_INDICATE, sec));
-            toAdd.add(s);
-        }
-        if (o.optBoolean("csc")) {
-            BluetoothGattService s = new BluetoothGattService(CSC, BluetoothGattService.SERVICE_TYPE_PRIMARY);
-            s.addCharacteristic(chr(CSC_MEAS, P_NOTIFY, sec));
-            s.addCharacteristic(chr(CSC_FEAT, P_READ, sec));
-            s.addCharacteristic(chr(LOCATION, P_READ, sec));
-            toAdd.add(s);
-        }
-        if (o.optBoolean("hr")) {
-            BluetoothGattService s = new BluetoothGattService(HRS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
-            s.addCharacteristic(chr(HRM, P_NOTIFY, sec));
-            s.addCharacteristic(chr(BSL, P_READ, sec));
-            toAdd.add(s);
-        }
-        if (o.optBoolean("ftms")) {
-            BluetoothGattService s = new BluetoothGattService(FTMS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
-            s.addCharacteristic(chr(FT_FEAT, P_READ, sec));
-            s.addCharacteristic(chr(FT_DATA, P_NOTIFY, sec));
-            if (o.optBoolean("ftTrain")) s.addCharacteristic(chr(FT_TRAIN, P_READ | P_NOTIFY, sec));
-            if (o.optBoolean("ftRanges")) { s.addCharacteristic(chr(FT_SPR, P_READ, sec)); s.addCharacteristic(chr(FT_INR, P_READ, sec)); }
-            if (o.optBoolean("ftCp")) { s.addCharacteristic(chr(FT_CP, P_WRITE | P_INDICATE, sec)); s.addCharacteristic(chr(FT_ST, P_NOTIFY, sec)); }
-            toAdd.add(s);
-        }
-        if (o.optBoolean("dis")) {
-            BluetoothGattService s = new BluetoothGattService(DIS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
-            for (UUID u : new UUID[]{MANUF, MODEL, SERIAL, FW, HW, SW}) s.addCharacteristic(chr(u, P_READ, false));
-            toAdd.add(s);
-        }
-        if (o.optBoolean("bas")) {
-            BluetoothGattService s = new BluetoothGattService(BAS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
-            s.addCharacteristic(chr(BATT, P_READ | P_NOTIFY, false));
-            toAdd.add(s);
-        }
+        // Fixed structure (all services, same order, same characteristics), whatever the options: a watch that has
+        // memorised the sensor finds it identical at every start. The options only change the advertising and the values sent.
+        BluetoothGattService hr = new BluetoothGattService(HRS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        hr.addCharacteristic(chr(HRM, P_NOTIFY, sec));
+        hr.addCharacteristic(chr(BSL, P_READ, sec));
+        toAdd.add(hr);
+        BluetoothGattService rs = new BluetoothGattService(RSC, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        rs.addCharacteristic(chr(RSC_MEAS, P_NOTIFY, sec));
+        rs.addCharacteristic(chr(RSC_FEAT, P_READ, sec));
+        rs.addCharacteristic(chr(LOCATION, P_READ, sec));
+        rs.addCharacteristic(chr(SC_CP, P_WRITE | P_INDICATE, sec));
+        toAdd.add(rs);
+        BluetoothGattService cs = new BluetoothGattService(CSC, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        cs.addCharacteristic(chr(CSC_MEAS, P_NOTIFY, sec));
+        cs.addCharacteristic(chr(CSC_FEAT, P_READ, sec));
+        cs.addCharacteristic(chr(LOCATION, P_READ, sec));
+        toAdd.add(cs);
+        BluetoothGattService ft = new BluetoothGattService(FTMS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        ft.addCharacteristic(chr(FT_FEAT, P_READ, sec));
+        ft.addCharacteristic(chr(FT_DATA, P_NOTIFY, sec));
+        ft.addCharacteristic(chr(FT_TRAIN, P_READ | P_NOTIFY, sec));
+        ft.addCharacteristic(chr(FT_SPR, P_READ, sec));
+        ft.addCharacteristic(chr(FT_INR, P_READ, sec));
+        ft.addCharacteristic(chr(FT_CP, P_WRITE | P_INDICATE, sec));
+        ft.addCharacteristic(chr(FT_ST, P_NOTIFY, sec));
+        toAdd.add(ft);
+        BluetoothGattService di = new BluetoothGattService(DIS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        for (UUID u : new UUID[]{MANUF, MODEL, SERIAL, FW, HW, SW}) di.addCharacteristic(chr(u, P_READ, false));
+        toAdd.add(di);
+        BluetoothGattService ba = new BluetoothGattService(BAS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        ba.addCharacteristic(chr(BATT, P_READ | P_NOTIFY, false));
+        toAdd.add(ba);
         nameInMain = o.optBoolean("nameMain", true);
-        host.log("montre : démarrage — profils " + profiles() + (sec ? ", chiffrement exigé" : ""));
+        host.log("montre : démarrage — profils annoncés : " + profiles() + (sec ? " · chiffrement exigé" : ""));
         server.addService(toAdd.poll());
         host.changed();
     }
@@ -209,8 +213,7 @@ public class WatchServer {
         if (o.optBoolean("csc")) p.add("vélo (CSC)");
         if (o.optBoolean("hr")) p.add("cardio (HRS)");
         if (o.optBoolean("ftms")) p.add("tapis (FTMS)");
-        if (o.optBoolean("dis")) p.add("infos appareil");
-        if (o.optBoolean("bas")) p.add("batterie");
+
         return String.join(", ", p);
     }
 
@@ -384,7 +387,7 @@ public class WatchServer {
         if (u.equals(FT_SPR)) return new byte[]{100, 0, 0x40, 0x06, 10, 0};
         if (u.equals(FT_INR)) return new byte[]{(byte) 0xCE, (byte) 0xFF, (byte) 0x90, 0x01, 10, 0};
         if (u.equals(MANUF)) return "App Hike".getBytes(StandardCharsets.UTF_8);
-        if (u.equals(MODEL)) return (o.optBoolean("rsc") ? "Foot Pod" : o.optBoolean("csc") ? "Speed Sensor" : o.optBoolean("hr") ? "HR Sensor" : "Treadmill").getBytes(StandardCharsets.UTF_8);
+        if (u.equals(MODEL)) return "App Hike Sensor".getBytes(StandardCharsets.UTF_8);
         if (u.equals(SERIAL)) return "AH0001".getBytes(StandardCharsets.UTF_8);
         if (u.equals(FW) || u.equals(SW)) return "1.0".getBytes(StandardCharsets.UTF_8);
         if (u.equals(HW)) return "1".getBytes(StandardCharsets.UTF_8);
