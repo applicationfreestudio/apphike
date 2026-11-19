@@ -66,15 +66,17 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 <div class="tip">Suunto Vertical : Réglages → Connectivité → Associer un capteur → <b>Foulée</b> (Foot POD), téléphone à côté de la montre, émission active. Le capteur de foulée ne transmet que la vitesse ; l’inclinaison n’existe que dans le profil tapis (FTMS), que la montre n’accepte peut-être pas. Chaque essai est noté dans le journal.</div>
 
 <details><summary>Valeurs envoyées</summary>
-<label class="ck"><input type="radio" name="src" data-k="src" value="tapis"><span>Valeurs du tapis<small>vitesse et inclinaison mesurées par le tapis connecté</small></span></label>
+<label class="ck"><input type="radio" name="src" data-k="src" value="tapis"><span>Valeurs du tapis<small>vitesse et inclinaison mesurées par le tapis, fréquence de la ceinture</small></span></label>
 <label class="ck"><input type="radio" name="src" data-k="src" value="test"><span>Valeurs de test<small>pour essayer sans faire tourner le tapis</small></span></label>
 <div class="fl"><span>Vitesse de test</span><span class="stp"><button type="button" data-step="tSp" data-d="-0.5">−</button><b id="tSpv"></b><button type="button" data-step="tSp" data-d="0.5">+</button></span></div>
+<div class="fl"><span>Cardio de test</span><span class="stp"><button type="button" data-step="tHr" data-d="-5">−</button><b id="tHrv"></b><button type="button" data-step="tHr" data-d="5">+</button></span></div>
 <div class="fl"><span>Inclinaison de test</span><span class="stp"><button type="button" data-step="tInc" data-d="-1">−</button><b id="tIncv"></b><button type="button" data-step="tInc" data-d="1">+</button></span></div>
 </details>
 
 <details><summary>Profils Bluetooth présentés</summary>
 <label class="ck"><input type="checkbox" data-k="rsc"><span>Capteur de foulée (RSC, 0x1814)<small>accepté par la plupart des montres : vitesse, cadence, distance</small></span></label>
 <label class="ck"><input type="checkbox" data-k="csc"><span>Capteur de vitesse vélo (CSC, 0x1816)<small>vitesse calculée à partir de tours de roue</small></span></label>
+<label class="ck"><input type="checkbox" data-k="hr"><span>Capteur cardio (HRS, 0x180D)<small>fréquence de la ceinture (ou de test) : accepté par toutes les montres, utile pour vérifier que la montre voit le téléphone</small></span></label>
 <label class="ck"><input type="checkbox" data-k="ftms"><span>Tapis de course (FTMS, 0x1826)<small>vitesse et inclinaison, si la montre gère les tapis</small></span></label>
 <label class="ck"><input type="checkbox" data-k="dis"><span>Informations de l’appareil (0x180A)<small>fabricant, modèle, version</small></span></label>
 <label class="ck"><input type="checkbox" data-k="bas"><span>Batterie (0x180F)<small>certaines montres la lisent avant d’accepter un capteur</small></span></label>
@@ -127,9 +129,9 @@ const $=id=>document.getElementById(id),A=window.AHC;let S={},O=null,logTxt="";
 const f1=x=>(+x).toFixed(1).replace(".",",");
 const kv=(el,rows)=>{el.innerHTML="";for(const [k,v] of rows){const a=document.createElement("span");a.textContent=k;const b=document.createElement("b");b.textContent=v;el.append(a,b)}};
 function save(){A.setOpts(JSON.stringify(O))}
-function fill(){document.querySelectorAll("[data-k]").forEach(e=>{const k=e.dataset.k,v=O[k];if(e.type==="checkbox")e.checked=!!v;else if(e.type==="radio")e.checked=String(v)===e.value;else if(document.activeElement!==e)e.value=v==null?"":v});$("tSpv").textContent=f1(O.tSp)+" km/h";$("tIncv").textContent=Math.round(O.tInc)+" %"}
+function fill(){document.querySelectorAll("[data-k]").forEach(e=>{const k=e.dataset.k,v=O[k];if(e.type==="checkbox")e.checked=!!v;else if(e.type==="radio")e.checked=String(v)===e.value;else if(document.activeElement!==e)e.value=v==null?"":v});$("tSpv").textContent=f1(O.tSp)+" km/h";$("tIncv").textContent=Math.round(O.tInc)+" %";$("tHrv").textContent=Math.round(O.tHr||120)+" bpm"}
 document.addEventListener("change",e=>{const el=e.target,k=el.dataset&&el.dataset.k;if(!k||!O)return;let v=el.type==="checkbox"?el.checked:el.value;if(el.type==="number"||k==="loc"||k==="period")v=+v;if(el.type==="radio"&&!el.checked)return;O[k]=v;save()});
-document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{const k=b.dataset.step;let v=(+O[k])+(+b.dataset.d);v=k==="tSp"?Math.max(0,Math.min(20,v)):Math.max(-5,Math.min(40,v));O[k]=Math.round(v*10)/10;fill();save()});
+document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{const k=b.dataset.step;let v=(+O[k])+(+b.dataset.d);v=k==="tSp"?Math.max(0,Math.min(20,v)):k==="tHr"?Math.max(40,Math.min(220,v)):Math.max(-5,Math.min(40,v));O[k]=Math.round(v*10)/10;fill();save()});
 $("prun").onclick=()=>A.pont(!(S.pont&&S.pont.on));
 $("wtog").onclick=()=>A.watch(!S.watchOn);
 $("lcp").onclick=()=>A.copy(logTxt);$("lsh").onclick=()=>A.share(logTxt);$("lcl").onclick=()=>{A.clearLog();$("log").textContent=""};
@@ -147,7 +149,7 @@ $("wdot").className="dot "+(!on?"":W.error?"ko":!W.adv?"wa":sub?"ok":"wa");
 $("wtxt").textContent=!on?"Émission désactivée":!P.on?"Démarre App Hike Connexion pour émettre":W.error?"Problème : "+W.error:!W.adv?"Démarrage de l’émission…":sub?"Montre abonnée : données envoyées":cl.length?"Liaison ouverte, aucun abonnement au capteur":"Émission en cours, en attente de la montre";
 const rows=[];if(on&&W.adv)rows.push(["Nom annoncé",W.name||"—"]);
 for(const c of cl)rows.push([c.subs?"Abonné":"Liaison",c.name+(c.subs?" · "+c.subs:"")]);
-if(on)rows.push(["Valeurs",W.live?f1(W.sp)+" km/h · "+f1(W.inc)+" % · cadence "+W.cad:(O&&O.src==="test"?"—":"pas de mesure du tapis")]);
+if(on)rows.push(["Valeurs",(W.live?f1(W.sp)+" km/h · "+f1(W.inc)+" % · cadence "+W.cad:(O&&O.src==="test"?"—":"pas de mesure du tapis"))+(O&&O.hr?" · cardio "+(W.hr||"—"):"")]);
 if(on)rows.push(["Envois",String(W.sent||0)]);
 kv($("wkv"),rows);
 if(S.log!==logTxt){const box=$("log"),bottom=box.scrollTop+box.clientHeight>=box.scrollHeight-20;logTxt=S.log||"";box.textContent=logTxt||"(vide)";if(bottom)box.scrollTop=box.scrollHeight}}

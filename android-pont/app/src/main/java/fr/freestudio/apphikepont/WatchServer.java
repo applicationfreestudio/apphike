@@ -43,7 +43,8 @@ import java.util.UUID;
 /**
  * Bluetooth server for the watch: the phone presents itself as one or more sensors (foot pod RSC, FTMS treadmill,
  * bike speed sensor CSC) and sends the treadmill speed and incline (or test values). Every way of doing it is an
- * option, to find what the watch accepts; everything the watch does is logged.
+ * option, to find what the watch accepts; everything the watch does is logged. A heart-rate sensor profile is also
+ * available (belt value or test value): every watch accepts that type, which shows whether it sees the phone at all.
  */
 @SuppressWarnings("MissingPermission")
 public class WatchServer {
@@ -55,7 +56,8 @@ public class WatchServer {
             CSC = u16(0x1816), CSC_MEAS = u16(0x2A5B), CSC_FEAT = u16(0x2A5C),
             FTMS = u16(0x1826), FT_FEAT = u16(0x2ACC), FT_DATA = u16(0x2ACD), FT_TRAIN = u16(0x2AD3), FT_SPR = u16(0x2AD4), FT_INR = u16(0x2AD5), FT_CP = u16(0x2AD9), FT_ST = u16(0x2ADA),
             DIS = u16(0x180A), MANUF = u16(0x2A29), MODEL = u16(0x2A24), SERIAL = u16(0x2A25), FW = u16(0x2A26), HW = u16(0x2A27), SW = u16(0x2A28),
-            BAS = u16(0x180F), BATT = u16(0x2A19);
+            BAS = u16(0x180F), BATT = u16(0x2A19),
+            HRS = u16(0x180D), HRM = u16(0x2A37), BSL = u16(0x2A38);
 
     static String hex4(UUID u) { return String.format("0x%04X", (int) (u.getMostSignificantBits() >>> 32) & 0xffff); }
     static String nameOf(UUID u) {
@@ -64,7 +66,7 @@ public class WatchServer {
         m.put(CSC_MEAS, "vélo : mesure"); m.put(CSC_FEAT, "vélo : fonctions"); m.put(FT_FEAT, "tapis : fonctions"); m.put(FT_DATA, "tapis : données");
         m.put(FT_TRAIN, "tapis : état d'entraînement"); m.put(FT_SPR, "tapis : plage de vitesse"); m.put(FT_INR, "tapis : plage d'inclinaison"); m.put(FT_CP, "tapis : point de contrôle");
         m.put(FT_ST, "tapis : état machine"); m.put(MANUF, "fabricant"); m.put(MODEL, "modèle"); m.put(SERIAL, "n° de série"); m.put(FW, "micrologiciel");
-        m.put(HW, "matériel"); m.put(SW, "logiciel"); m.put(BATT, "batterie");
+        m.put(HW, "matériel"); m.put(SW, "logiciel"); m.put(BATT, "batterie"); m.put(HRM, "cardio : mesure"); m.put(BSL, "cardio : position");
         String n = m.get(u);
         return hex4(u) + (n != null ? " (" + n + ")" : "");
     }
@@ -74,7 +76,7 @@ public class WatchServer {
         try {
             return new JSONObject()
                     .put("src", "tapis").put("tSp", 5.0).put("tInc", 8.0)
-                    .put("rsc", true).put("ftms", false).put("csc", false).put("dis", true).put("bas", true)
+                    .put("tHr", 120).put("rsc", true).put("hr", false).put("ftms", false).put("csc", false).put("dis", true).put("bas", true)
                     .put("name", "").put("nameMain", true).put("advAll", true).put("txHigh", true).put("advFast", true)
                     .put("secure", false).put("period", 1000)
                     .put("cadMode", "estimee").put("cadFix", 160).put("cadHalf", false).put("stride", true).put("dist", true).put("running", "auto").put("loc", 2).put("scCp", false)
@@ -100,7 +102,7 @@ public class WatchServer {
     // values
     Double tmSp, tmInc; long tmAt;
     double dist, elev, wheelRevs; long lastWheelEvt;
-    double curSp, curInc; int curCad;
+    double curSp, curInc; int curCad, curHr;
 
     WatchServer(Context c, Host h) { ctx = c; host = h; }
 
@@ -115,10 +117,13 @@ public class WatchServer {
 
     /** Options that change the services or the advertising (need a restart), as opposed to the values sent. */
     static boolean structural(JSONObject a, JSONObject b) {
-        for (String k : new String[]{"rsc", "ftms", "csc", "dis", "bas", "name", "nameMain", "advAll", "txHigh", "advFast", "secure", "scCp", "ftCp", "ftRanges", "ftTrain", "ftFields", "stride", "dist", "loc"})
+        for (String k : new String[]{"rsc", "hr", "ftms", "csc", "dis", "bas", "name", "nameMain", "advAll", "txHigh", "advFast", "secure", "scCp", "ftCp", "ftRanges", "ftTrain", "ftFields", "stride", "dist", "loc"})
             if (!String.valueOf(a.opt(k)).equals(String.valueOf(b.opt(k)))) return true;
         return false;
     }
+
+    Integer beltHr; long hrAt;
+    void heartRate(int b) { beltHr = b; hrAt = SystemClock.elapsedRealtime(); }
 
     void treadmill(Double sp, Double inc) { if (sp != null) tmSp = sp; if (inc != null) tmInc = inc; tmAt = SystemClock.elapsedRealtime(); }
 
@@ -138,7 +143,7 @@ public class WatchServer {
         BluetoothAdapter a = bm.getAdapter();
         if (a == null || !a.isEnabled()) { error = "Bluetooth désactivé"; host.changed(); return; }
         if (!a.isMultipleAdvertisementSupported() || a.getBluetoothLeAdvertiser() == null) { error = "ce téléphone ne sait pas émettre"; host.log("✗ montre : " + error); host.changed(); return; }
-        if (!o.optBoolean("rsc") && !o.optBoolean("ftms") && !o.optBoolean("csc")) { error = "aucun profil coché"; host.changed(); return; }
+        if (!o.optBoolean("rsc") && !o.optBoolean("ftms") && !o.optBoolean("csc") && !o.optBoolean("hr")) { error = "aucun profil coché"; host.changed(); return; }
         on = true; error = ""; sent = 0; sentFail = 0; startAt = SystemClock.elapsedRealtime(); dist = 0; elev = 0; wheelRevs = 0;
         try { ctx.registerReceiver(bond, new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)); } catch (Exception ignored) { }
         String nm = o.optString("name", "").trim();
@@ -165,6 +170,12 @@ public class WatchServer {
             s.addCharacteristic(chr(CSC_MEAS, P_NOTIFY, sec));
             s.addCharacteristic(chr(CSC_FEAT, P_READ, sec));
             s.addCharacteristic(chr(LOCATION, P_READ, sec));
+            toAdd.add(s);
+        }
+        if (o.optBoolean("hr")) {
+            BluetoothGattService s = new BluetoothGattService(HRS, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+            s.addCharacteristic(chr(HRM, P_NOTIFY, sec));
+            s.addCharacteristic(chr(BSL, P_READ, sec));
             toAdd.add(s);
         }
         if (o.optBoolean("ftms")) {
@@ -196,6 +207,7 @@ public class WatchServer {
         List<String> p = new ArrayList<>();
         if (o.optBoolean("rsc")) p.add("foulée (RSC)");
         if (o.optBoolean("csc")) p.add("vélo (CSC)");
+        if (o.optBoolean("hr")) p.add("cardio (HRS)");
         if (o.optBoolean("ftms")) p.add("tapis (FTMS)");
         if (o.optBoolean("dis")) p.add("infos appareil");
         if (o.optBoolean("bas")) p.add("batterie");
@@ -243,6 +255,7 @@ public class WatchServer {
         List<UUID> list = new ArrayList<>();
         if (o.optBoolean("rsc")) list.add(RSC);
         if (o.optBoolean("csc")) list.add(CSC);
+        if (o.optBoolean("hr")) list.add(HRS);
         if (o.optBoolean("ftms")) list.add(FTMS);
         if (!o.optBoolean("advAll", true) && list.size() > 1) list = list.subList(0, 1);
         for (UUID u : list) d.addServiceUuid(new ParcelUuid(u));
@@ -280,6 +293,11 @@ public class WatchServer {
 
     void send() {
         long now = SystemClock.elapsedRealtime();
+        if (o.optBoolean("hr")) {
+            boolean t = "test".equals(o.optString("src"));
+            Integer b = t ? Integer.valueOf(o.optInt("tHr", 120)) : (beltHr != null && now - hrAt < 5000 ? beltHr : null);
+            if (b != null) { curHr = b; notifyAll(HRS, HRM, new byte[]{0x00, (byte) Math.min(255, Math.max(0, b))}, false); }
+        }
         double dt = lastTick == 0 ? 0 : (now - lastTick) / 1000.0;
         lastTick = now;
         boolean test = "test".equals(o.optString("src"));
@@ -366,11 +384,12 @@ public class WatchServer {
         if (u.equals(FT_SPR)) return new byte[]{100, 0, 0x40, 0x06, 10, 0};
         if (u.equals(FT_INR)) return new byte[]{(byte) 0xCE, (byte) 0xFF, (byte) 0x90, 0x01, 10, 0};
         if (u.equals(MANUF)) return "App Hike".getBytes(StandardCharsets.UTF_8);
-        if (u.equals(MODEL)) return (o.optBoolean("rsc") ? "Foot Pod" : o.optBoolean("csc") ? "Speed Sensor" : "Treadmill").getBytes(StandardCharsets.UTF_8);
+        if (u.equals(MODEL)) return (o.optBoolean("rsc") ? "Foot Pod" : o.optBoolean("csc") ? "Speed Sensor" : o.optBoolean("hr") ? "HR Sensor" : "Treadmill").getBytes(StandardCharsets.UTF_8);
         if (u.equals(SERIAL)) return "AH0001".getBytes(StandardCharsets.UTF_8);
         if (u.equals(FW) || u.equals(SW)) return "1.0".getBytes(StandardCharsets.UTF_8);
         if (u.equals(HW)) return "1".getBytes(StandardCharsets.UTF_8);
         if (u.equals(BATT)) return new byte[]{100};
+        if (u.equals(BSL)) return new byte[]{1};   // chest
         return new byte[0];
     }
 
@@ -461,7 +480,7 @@ public class WatchServer {
                 cl.put(new JSONObject().put("name", label(e.getValue())).put("subs", String.join(", ", l)));
             }
             s.put("on", on).put("adv", advertising).put("error", error).put("name", bm != null ? phoneName() : "").put("clients", cl).put("sent", sent)
-                    .put("live", live()).put("sp", curSp).put("inc", curInc).put("cad", curCad)
+                    .put("live", live()).put("sp", curSp).put("inc", curInc).put("cad", curCad).put("hr", curHr)
                     .put("tm", tmSp == null ? JSONObject.NULL : String.format(Locale.FRANCE, "%.1f km/h · %.1f %%", tmSp, tmInc == null ? 0 : tmInc));
         } catch (Exception ignored) { }
         return s;

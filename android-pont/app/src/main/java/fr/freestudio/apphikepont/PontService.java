@@ -138,6 +138,10 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
 
     @Override public void event(JSONObject e) {
         if (watch != null && "val".equals(e.optString("t")) && e.optString("c").startsWith("00002acd")) parseTreadmill(e.optString("h"));
+        if (watch != null && "val".equals(e.optString("t")) && e.optString("c").startsWith("00002a37")) {
+            byte[] v = Ble.unhex(e.optString("h"));
+            if (v.length >= 2) watch.heartRate((v[0] & 1) != 0 && v.length >= 3 ? ((v[1] & 0xff) | ((v[2] & 0xff) << 8)) : (v[1] & 0xff));
+        }
         if (ws != null) ws.send(e.toString());
     }
 
