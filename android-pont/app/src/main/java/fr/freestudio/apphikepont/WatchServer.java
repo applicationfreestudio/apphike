@@ -76,7 +76,7 @@ public class WatchServer {
         try {
             return new JSONObject()
                     .put("src", "tapis").put("tSp", 5.0).put("tInc", 8.0)
-                    .put("tHr", 120).put("rsc", true).put("hr", false).put("ftms", false).put("csc", false).put("dis", true).put("bas", true)
+                    .put("tHr", 120).put("hrContact", true).put("rsc", true).put("hr", false).put("ftms", false).put("csc", false).put("dis", true).put("bas", true)
                     .put("name", "").put("nameMain", true).put("advAll", true).put("txHigh", true).put("advFast", true)
                     .put("secure", false).put("period", 1000)
                     .put("cadMode", "estimee").put("cadFix", 160).put("cadHalf", false).put("stride", true).put("dist", true).put("running", "auto").put("loc", 2).put("scCp", false)
@@ -300,7 +300,8 @@ public class WatchServer {
         if (o.optBoolean("hr")) {
             boolean t = "test".equals(o.optString("src"));
             Integer b = t ? Integer.valueOf(o.optInt("tHr", 120)) : (beltHr != null && now - hrAt < 5000 ? beltHr : null);
-            if (b != null) { curHr = b; notifyAll(HRS, HRM, new byte[]{0x00, (byte) Math.min(255, Math.max(0, b))}, false); }
+            // flags 0x06: sensor contact supported and detected (some watches ignore a value without contact)
+            if (b != null) { curHr = b; notifyAll(HRS, HRM, new byte[]{(byte) (o.optBoolean("hrContact", true) ? 0x06 : 0x00), (byte) Math.min(255, Math.max(0, b))}, false); }
         }
         double dt = lastTick == 0 ? 0 : (now - lastTick) / 1000.0;
         lastTick = now;
@@ -370,7 +371,7 @@ public class WatchServer {
                 if (Build.VERSION.SDK_INT >= 33) ok = server.notifyCharacteristicChanged(e.getValue(), c, ind, v) == 0;
                 else { c.setValue(v); ok = server.notifyCharacteristicChanged(e.getValue(), c, ind); }
             } catch (Exception x) { ok = false; }
-            if (ok) { sent++; if (sent == 1) host.log("montre : premières données envoyées à " + label(e.getValue()) + " " + nameOf(ch) + " [" + hex(v) + "]"); }
+            if (ok) { sent++; if (sent % 30 == 0) host.log("montre : " + sent + " envois (dernier " + nameOf(ch) + " [" + hex(v) + "])"); if (sent == 1) host.log("montre : premières données envoyées à " + label(e.getValue()) + " " + nameOf(ch) + " [" + hex(v) + "]"); }
             else if (++sentFail % 20 == 1) host.log("montre : envoi refusé par Android (" + sentFail + " fois)");
         }
     }
