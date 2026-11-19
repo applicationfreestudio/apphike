@@ -155,7 +155,7 @@ public class WsServer {
             }
             String key = h.get("sec-websocket-key"), origin = h.get("origin");
             if (key == null || !"websocket".equalsIgnoreCase(h.get("upgrade"))) {
-                out.write("HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain\r\nContent-Length: 30\r\n\r\nPont tapis App Hike : actif.\r\n".getBytes(StandardCharsets.ISO_8859_1));
+                out.write("HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain\r\nContent-Length: 30\r\n\r\nApp Hike Connexion : active.\r\n".getBytes(StandardCharsets.ISO_8859_1));
                 out.flush(); s.close(); return;
             }
             if (!originAllowed(origin)) {

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * App Hike bridge: foreground service (permanent notification) holding the native Bluetooth (treadmill, belt)
+ * App Hike Connexion (bridge): foreground service (permanent notification) holding the native Bluetooth (treadmill, belt)
  * and the local channel (WebSocket 127.0.0.1:47826) used by the App Hike page in Chrome.
  * If the page goes away for more than 10 s, the devices are released.
  */
@@ -80,7 +80,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, PontService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, "pont")
                 .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                .setContentTitle("Pont tapis actif")
+                .setContentTitle("App Hike Connexion active")
                 .setContentText(status())
                 .setContentIntent(open)
                 .setOngoing(true)
@@ -92,7 +92,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         super.onCreate();
         instance = this;
         NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel("pont", "Pont tapis", NotificationManager.IMPORTANCE_LOW));
+        nm.createNotificationChannel(new NotificationChannel("pont", "App Hike Connexion", NotificationManager.IMPORTANCE_LOW));
         if (Build.VERSION.SDK_INT >= 29) startForeground(1, notif(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
         else startForeground(1, notif());
         ble = new Ble(this, this, this);
@@ -101,7 +101,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
             try { ws.start(); }
             catch (Exception e) { h.post(() -> { error = "canal local indisponible (" + e.getMessage() + ")"; log("✗ " + error); changed(); }); }
         }, "ws-start").start();
-        log("pont démarré");
+        log("App Hike Connexion démarrée");
     }
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
@@ -114,7 +114,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         h.removeCallbacksAndMessages(null);
         if (ws != null) ws.stop();
         if (ble != null) ble.closeAll();
-        log("pont arrêté");
+        log("App Hike Connexion arrêtée");
         super.onDestroy();
     }
 

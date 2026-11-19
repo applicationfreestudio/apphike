@@ -36,12 +36,12 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(16), dp(32), dp(16), dp(12));
         TextView t = new TextView(this);
-        t.setText("Pont tapis App Hike");
+        t.setText("App Hike Connexion");
         t.setTextSize(22);
         t.setTypeface(Typeface.DEFAULT_BOLD);
         root.addView(t);
         TextView help = new TextView(this);
-        help.setText("Laisse le pont actif (notification « Pont tapis actif »), puis ouvre App Hike dans Chrome avec l'option « Passer par l'app Pont tapis » cochée. Le pont se connecte au tapis et à la ceinture à la demande d'App Hike.");
+        help.setText("Laisse App Hike Connexion active (notification « App Hike Connexion active »), puis ouvre App Hike dans Chrome avec l'option « Se connecter par App Hike Connexion » cochée. Le tapis et la ceinture se connectent ici, à la demande d'App Hike.");
         help.setTextSize(14);
         help.setPadding(0, dp(8), 0, dp(8));
         root.addView(help);
@@ -68,6 +68,20 @@ public class MainActivity extends Activity {
         setContentView(root);
         PontService.onChange = this::ui;
         start();
+        backToChrome(getIntent());
+    }
+
+    /** Opened by App Hike's "Lancer App Hike Connexion" button: once the service runs, go back to Chrome. */
+    void backToChrome(Intent i) {
+        if (i == null || !Intent.ACTION_VIEW.equals(i.getAction()) || i.getData() == null || !"apphikeconnexion".equals(i.getData().getScheme())) return;
+        setIntent(new Intent(this, MainActivity.class));
+        if (needed().length == 0 || btGranted()) h.postDelayed(() -> moveTaskToBack(true), 600);
+    }
+
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        if (PontService.instance == null) start();
+        backToChrome(i);
     }
 
     @Override protected void onResume() { super.onResume(); PontService.onChange = this::ui; ui(); }
@@ -99,14 +113,14 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int rc, String[] p, int[] r) {
         if (btGranted()) { startForegroundService(new Intent(this, PontService.class)); h.postDelayed(this::ui, 400); }
-        else { PontService.addLog("autorisation « Appareils à proximité » refusée : le pont ne peut pas fonctionner"); ui(); }
+        else { PontService.addLog("autorisation « Appareils à proximité » refusée : App Hike Connexion ne peut pas fonctionner"); ui(); }
     }
 
     void ui() {
         PontService s = PontService.instance;
-        tvState.setText(s == null ? "○ Pont arrêté" : "● " + s.status());
+        tvState.setText(s == null ? "○ App Hike Connexion arrêtée" : "● " + s.status());
         tvState.setTextColor(s == null ? 0xFF9E9E9E : s.page ? 0xFF43A047 : 0xFFFB8C00);
-        bRun.setText(s == null ? "Démarrer le pont" : "Arrêter le pont");
+        bRun.setText(s == null ? "Démarrer" : "Arrêter");
         StringBuilder b = new StringBuilder();
         synchronized (PontService.LOG) { for (String l : PontService.LOG) b.append(l).append('\n'); }
         tvLog.setText(b);

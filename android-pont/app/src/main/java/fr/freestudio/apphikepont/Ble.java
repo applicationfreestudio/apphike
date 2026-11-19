@@ -148,7 +148,7 @@ class Ble {
     void scan(String filtersJson, boolean on) {
         if (!on) { filters = null; maybeStop(); return; }
         if (!ready()) {
-            try { out.event(new JSONObject().put("t", "scanerr").put("e", adapter == null ? "Bluetooth absent" : !adapter.isEnabled() ? "Active le Bluetooth du téléphone." : "Autorise « Appareils à proximité » dans l'app Pont tapis.")); } catch (Exception ignored) { }
+            try { out.event(new JSONObject().put("t", "scanerr").put("e", adapter == null ? "Bluetooth absent" : !adapter.isEnabled() ? "Active le Bluetooth du téléphone." : "Autorise « Appareils à proximité » dans l'app App Hike Connexion.")); } catch (Exception ignored) { }
             return;
         }
         try { filters = new JSONObject(filtersJson).optJSONArray("filters"); } catch (Exception e) { filters = null; }
