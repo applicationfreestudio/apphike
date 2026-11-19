@@ -92,8 +92,9 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 
 <details><summary>Annonce Bluetooth</summary>
 <div class="fl" style="display:block"><span>Nom annoncé<small>vide : nom Bluetooth du téléphone ; sinon le nom du téléphone est changé pendant l’émission puis rétabli</small></span><input type="text" data-k="name" placeholder="ex. AppHike Pod" style="margin-top:6px"></div>
+<div class="fl"><span>Profil annoncé en premier<small>les autres profils cochés suivent</small></span><select data-k="advFirst"><option value="tapis">tapis (FTMS)</option><option value="cardio">cardio</option><option value="foulee">foulée</option><option value="velo">vélo</option></select></div>
 <label class="ck"><input type="checkbox" data-k="nameMain"><span>Nom dans l’annonce principale<small>sinon dans la réponse au scan</small></span></label>
-<label class="ck"><input type="checkbox" data-k="advAll"><span>Annoncer tous les profils<small>décoché : seulement le premier (foulée, sinon vélo, sinon tapis)</small></span></label>
+<label class="ck"><input type="checkbox" data-k="advAll"><span>Annoncer tous les profils<small>décoché : seulement le profil annoncé en premier</small></span></label>
 <label class="ck"><input type="checkbox" data-k="advFast"><span>Annonce rapide<small>visible plus vite, consomme un peu plus</small></span></label>
 <label class="ck"><input type="checkbox" data-k="txHigh"><span>Puissance d’émission élevée</span></label>
 </details>

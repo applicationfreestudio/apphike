@@ -77,7 +77,7 @@ public class WatchServer {
             return new JSONObject()
                     .put("src", "tapis").put("tSp", 5.0).put("tInc", 8.0)
                     .put("tHr", 120).put("hrContact", true).put("rsc", true).put("hr", false).put("ftms", false).put("csc", false).put("dis", true).put("bas", true)
-                    .put("name", "").put("nameMain", true).put("advAll", true).put("txHigh", true).put("advFast", true)
+                    .put("name", "").put("advFirst", "tapis").put("nameMain", true).put("advAll", true).put("txHigh", true).put("advFast", true)
                     .put("secure", false).put("period", 1000)
                     .put("cadMode", "estimee").put("cadFix", 160).put("cadHalf", false).put("stride", true).put("dist", true).put("running", "auto").put("loc", 2).put("scCp", false)
                     .put("ftFields", "vitesse+inclinaison").put("ftCp", true).put("ftRanges", true).put("ftTrain", true)
@@ -109,7 +109,7 @@ public class WatchServer {
     void setOptions(JSONObject n) {
         JSONObject d = defaults();
         try { for (java.util.Iterator<String> it = n.keys(); it.hasNext(); ) { String k = it.next(); d.put(k, n.get(k)); } } catch (Exception ignored) { }
-        boolean gatt = on && changed(o, d, "secure"), ad = on && changed(o, d, "rsc", "hr", "ftms", "csc", "name", "nameMain", "advAll", "txHigh", "advFast");
+        boolean gatt = on && changed(o, d, "secure"), ad = on && changed(o, d, "rsc", "hr", "ftms", "csc", "advFirst", "name", "nameMain", "advAll", "txHigh", "advFast");
         o = d;
         if (gatt) { host.log("montre : chiffrement changé, capteur reconstruit (refais l'association sur la montre)"); stop(); h.postDelayed(this::start, 600); }
         else if (ad) { host.log("montre : annonce mise à jour (le capteur garde la même structure)"); restartAdvertising(); }
@@ -256,13 +256,20 @@ public class WatchServer {
                 .setTxPowerLevel(o.optBoolean("txHigh", true) ? AdvertiseSettings.ADVERTISE_TX_POWER_HIGH : AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
                 .setConnectable(true).setTimeout(0).build();
         AdvertiseData.Builder d = new AdvertiseData.Builder().setIncludeDeviceName(nameInMain);
+        // advertising order: the chosen profile first, then the others (tapis, cardio, foulée, vélo)
         List<UUID> list = new ArrayList<>();
-        if (o.optBoolean("rsc")) list.add(RSC);
-        if (o.optBoolean("csc")) list.add(CSC);
-        if (o.optBoolean("hr")) list.add(HRS);
-        if (o.optBoolean("ftms")) list.add(FTMS);
+        String first = o.optString("advFirst", "tapis");
+        String[] order = {first, "tapis", "cardio", "foulee", "velo"};
+        for (String k : order) {
+            UUID u = k.equals("tapis") && o.optBoolean("ftms") ? FTMS : k.equals("cardio") && o.optBoolean("hr") ? HRS
+                    : k.equals("foulee") && o.optBoolean("rsc") ? RSC : k.equals("velo") && o.optBoolean("csc") ? CSC : null;
+            if (u != null && !list.contains(u)) list.add(u);
+        }
         if (!o.optBoolean("advAll", true) && list.size() > 1) list = list.subList(0, 1);
         for (UUID u : list) d.addServiceUuid(new ParcelUuid(u));
+        List<String> names = new ArrayList<>();
+        for (UUID u : list) names.add(u.equals(FTMS) ? "tapis" : u.equals(HRS) ? "cardio" : u.equals(RSC) ? "foulée" : "vélo");
+        host.log("montre : ordre d'annonce : " + String.join(" → ", names));
         if (list.contains(FTMS)) d.addServiceData(new ParcelUuid(FTMS), new byte[]{0x01, 0x01, 0x00});
         AdvertiseData resp = new AdvertiseData.Builder().setIncludeDeviceName(!nameInMain).build();
         adv.startAdvertising(set, d.build(), resp, advCb);
