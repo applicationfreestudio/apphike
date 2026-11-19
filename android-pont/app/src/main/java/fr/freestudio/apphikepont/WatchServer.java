@@ -48,7 +48,7 @@ import java.util.UUID;
  */
 @SuppressWarnings("MissingPermission")
 public class WatchServer {
-    interface Host { void log(String s); void changed(); boolean isCentral(String address); }
+    interface Host { void log(String s); void changed(); boolean isCentral(String address); void pairing(boolean on, String who); }
 
     static UUID u16(int v) { return UUID.fromString(String.format("%08x-0000-1000-8000-00805f9b34fb", v)); }
     static final UUID CCCD = u16(0x2902),
@@ -151,7 +151,8 @@ public class WatchServer {
             BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
             int st = i.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1);
             if (d == null) return;
-            host.log("montre : appairage avec " + label(d) + " → " + (st == BluetoothDevice.BOND_BONDED ? "appairé" : st == BluetoothDevice.BOND_BONDING ? "en cours" : "non appairé"));
+            host.log("montre : appairage avec " + label(d) + " → " + (st == BluetoothDevice.BOND_BONDED ? "appairé" : st == BluetoothDevice.BOND_BONDING ? "en cours : accepte la demande d'association sur le téléphone" : "non appairé"));
+            host.pairing(st == BluetoothDevice.BOND_BONDING, label(d));
         }
     };
 
