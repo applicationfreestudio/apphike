@@ -185,6 +185,8 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
 
     @Override public void onLog(String s) { h.post(() -> log(s)); }
 
+    @Override public boolean isCentral(String a) { return ble != null && ble.conns.containsKey(a); }
+
     @Override public void onText(String text) {
         h.post(() -> {
             try {

@@ -144,9 +144,9 @@ $("prun").textContent=!S.perm?"Accorder les autorisations":P.on?"Arrêter App Hi
 const W=S.watch||{},on=!!S.watchOn;$("wtog").setAttribute("aria-pressed",on);
 const cl=W.clients||[],sub=cl.some(c=>c.subs);$("wtog").className="tog"+(on&&W.adv?(sub?" ok":" wa"):"");
 $("wdot").className="dot "+(!on?"":W.error?"ko":!W.adv?"wa":sub?"ok":"wa");
-$("wtxt").textContent=!on?"Émission désactivée":!P.on?"Démarre App Hike Connexion pour émettre":W.error?"Problème : "+W.error:!W.adv?"Démarrage de l’émission…":sub?"Montre abonnée : données envoyées":cl.length?"Montre connectée, pas encore abonnée":"Émission en cours, en attente de la montre";
+$("wtxt").textContent=!on?"Émission désactivée":!P.on?"Démarre App Hike Connexion pour émettre":W.error?"Problème : "+W.error:!W.adv?"Démarrage de l’émission…":sub?"Montre abonnée : données envoyées":cl.length?"Liaison ouverte, aucun abonnement au capteur":"Émission en cours, en attente de la montre";
 const rows=[];if(on&&W.adv)rows.push(["Nom annoncé",W.name||"—"]);
-for(const c of cl)rows.push(["Connecté",c.name+(c.subs?" · abonné à "+c.subs:"")]);
+for(const c of cl)rows.push([c.subs?"Abonné":"Liaison",c.name+(c.subs?" · "+c.subs:"")]);
 if(on)rows.push(["Valeurs",W.live?f1(W.sp)+" km/h · "+f1(W.inc)+" % · cadence "+W.cad:(O&&O.src==="test"?"—":"pas de mesure du tapis")]);
 if(on)rows.push(["Envois",String(W.sent||0)]);
 kv($("wkv"),rows);

@@ -47,7 +47,7 @@ import java.util.UUID;
  */
 @SuppressWarnings("MissingPermission")
 public class WatchServer {
-    interface Host { void log(String s); void changed(); }
+    interface Host { void log(String s); void changed(); boolean isCentral(String address); }
 
     static UUID u16(int v) { return UUID.fromString(String.format("%08x-0000-1000-8000-00805f9b34fb", v)); }
     static final UUID CCCD = u16(0x2902),
@@ -387,8 +387,12 @@ public class WatchServer {
         @Override public void onConnectionStateChange(BluetoothDevice d, int st, int ns) {
             h.post(() -> {
                 if (!on) return;
-                if (ns == BluetoothProfile.STATE_CONNECTED) { clients.put(d.getAddress(), d); host.log("montre : " + label(d) + " CONNECTÉ (statut " + st + ", appairage " + bondTxt(d) + ")"); }
-                else if (ns == BluetoothProfile.STATE_DISCONNECTED) { clients.remove(d.getAddress()); subs.remove(d.getAddress()); host.log("montre : " + label(d) + " déconnecté (statut " + st + ")"); }
+                // Android reports here every Bluetooth link of the phone: the treadmill and the belt (driven by this app)
+                // are not clients of the server; a watch already paired with the phone keeps its link with its own app.
+                if (host.isCentral(d.getAddress())) return;
+                boolean bonded = "oui".equals(bondTxt(d));
+                if (ns == BluetoothProfile.STATE_CONNECTED) { clients.put(d.getAddress(), d); host.log("montre : liaison " + label(d) + " ouverte" + (bonded ? " (appareil appairé au téléphone : peut être la liaison de son app, pas une connexion au capteur)" : "")); }
+                else if (ns == BluetoothProfile.STATE_DISCONNECTED) { clients.remove(d.getAddress()); subs.remove(d.getAddress()); host.log("montre : liaison " + label(d) + " fermée"); }
                 host.changed();
             });
         }
