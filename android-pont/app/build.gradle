@@ -1,0 +1,25 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'fr.freestudio.apphikepont'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'fr.freestudio.apphikepont'
+        minSdk 26
+        targetSdk 34
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName '1.0.' + (System.getenv('GITHUB_RUN_NUMBER') ?: '0')
+    }
+    signingConfigs {
+        // stable key kept by the CI (see the workflow), so a new APK installs over the previous one without losing data
+        stable {
+            storeFile file(System.getenv('APK_KEYSTORE') ?: 'none.jks')
+            storePassword 'apphike-local'
+            keyAlias 'apphike'
+            keyPassword 'apphike-local'
+        }
+    }
+    buildTypes {
+        debug { if (System.getenv('APK_KEYSTORE')) signingConfig signingConfigs.stable }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
