@@ -8,7 +8,7 @@
 const KEEP = 10;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,PUT,POST,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "Authorization,Content-Type,X-Icu-Auth",
   "Access-Control-Max-Age": "86400",
 };
@@ -29,7 +29,7 @@ export default {
       if (!same(req.headers.get("Authorization") || "", "Bearer " + env.TOKEN)) return json({ error: "unauthorized" }, 401);
       const ia = req.headers.get("X-Icu-Auth") || "";
       if (!/^Basic [A-Za-z0-9+/=]+$/.test(ia)) return json({ error: "identifiants Intervals.icu manquants" }, 400);
-      if (!["GET", "PUT"].includes(req.method)) return json({ error: "method not allowed" }, 405);
+      if (!["GET", "PUT", "DELETE"].includes(req.method)) return json({ error: "method not allowed" }, 405);
       const r = await fetch("https://intervals.icu" + url.pathname.slice(4) + url.search, {
         method: req.method,
         headers: { Authorization: ia, ...(req.method === "PUT" ? { "Content-Type": "application/json" } : {}) },
