@@ -61,6 +61,7 @@ public class MainActivity extends Activity {
                 st.put("version", v);
                 st.put("pont", new JSONObject().put("on", s != null).put("page", s != null && s.page).put("devices", s != null && s.ble != null ? s.ble.connectedNames() : "").put("error", s != null ? s.error : ""));
                 st.put("watchOn", wp.getBoolean("on", false));
+                st.put("belt", s != null && s.belt != null ? s.belt.state() : new JSONObject().put("on", false));
                 st.put("watch", s != null && s.watch != null ? s.watch.state() : new JSONObject().put("on", false));
                 JSONObject o = WatchServer.defaults(), saved = PontService.loadOptions(MainActivity.this);
                 for (java.util.Iterator<String> it = saved.keys(); it.hasNext(); ) { String k = it.next(); o.put(k, saved.get(k)); }
@@ -100,6 +101,9 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void share(String text) {
             h.post(() -> startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Partager le journal")));
         }
+        @JavascriptInterface public void beltScan(boolean on) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.belt != null) s.belt.scan(on); }); }
+        @JavascriptInterface public void beltPick(String id, String name) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.belt != null) s.belt.pick(id, name == null || name.isEmpty() ? null : name); }); }
+        @JavascriptInterface public void beltOn(boolean on) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.belt != null) s.belt.setOn(on); }); }
         @JavascriptInterface public void clearLog() { synchronized (PontService.LOG) { PontService.LOG.clear(); } }
         @JavascriptInterface public void perms() { h.post(MainActivity.this::start); }
     }

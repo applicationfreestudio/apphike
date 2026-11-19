@@ -28,7 +28,7 @@ import java.util.Locale;
  * and the local channel (WebSocket 127.0.0.1:47826) used by the App Hike page in Chrome.
  * If the page goes away for more than 10 s, the devices are released.
  */
-public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.Handler, WatchServer.Host {
+public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.Handler, WatchServer.Host, BeltClient.Host {
     static final String STOP = "fr.freestudio.apphikepont.STOP";
     static PontService instance;
     static final List<String> LOG = new ArrayList<>();
@@ -38,6 +38,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
     Ble ble;
     WsServer ws;
     WatchServer watch;
+    BeltClient belt;
     String error = "";
     boolean page;
     final Runnable releaseAll = () -> { if (!page) { log("page absente depuis 10 s : appareils libérés"); ble.closeAll(); ble.watched.clear(); ble.filters = null; changed(); } };
@@ -74,6 +75,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         return (error.isEmpty() ? "" : error + " · ")
                 + (page ? "App Hike connectée" : "En attente d'App Hike")
                 + (d.isEmpty() ? "" : " · " + d)
+                + (belt != null && belt.connected ? " · ceinture " + (belt.bpm > 0 ? belt.bpm + " bpm" : "connectée") : "")
                 + (watch != null && watch.on ? " · montre : " + (watch.clients.isEmpty() ? "en attente" : "connectée") : "");
     }
 
@@ -106,6 +108,8 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         watch = new WatchServer(this, this);
         watch.setOptions(loadOptions(this));
         if (getSharedPreferences("watch", MODE_PRIVATE).getBoolean("on", false)) watch.start();
+        belt = new BeltClient(this, this);
+        belt.start();
         log("App Hike Connexion démarrée");
     }
 
@@ -119,6 +123,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         h.removeCallbacksAndMessages(null);
         if (ws != null) ws.stop();
         if (watch != null) watch.stop();
+        if (belt != null) { belt.scan(false); belt.stop(); }
         if (ble != null) ble.closeAll();
         log("App Hike Connexion arrêtée");
         super.onDestroy();
@@ -203,7 +208,9 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
                 .setContentIntent(bt).setAutoCancel(true).setTimeoutAfter(40000).build());
     }
 
-    @Override public boolean isCentral(String a) { return ble != null && ble.conns.containsKey(a); }
+    @Override public boolean isCentral(String a) { return (ble != null && ble.conns.containsKey(a)) || (belt != null && a.equals(belt.addr()) && belt.g != null); }
+
+    @Override public void heartRate(int bpm) { if (watch != null) watch.heartRate(bpm); }
 
     @Override public void onText(String text) {
         h.post(() -> {
