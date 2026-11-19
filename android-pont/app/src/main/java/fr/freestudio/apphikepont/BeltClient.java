@@ -107,7 +107,7 @@ public class BeltClient {
 
     // ------------------------------------------------------------ connection
     final Runnable retry = this::start;
-    final Runnable watchdog = () -> { if (!connected) { host.log("ceinture : pas de réponse, nouvel essai"); close(); later(); } };
+    final Runnable watchdog = () -> { if (!connected) { BeltClient.this.host.log("ceinture : pas de réponse, nouvel essai"); close(); later(); } };
 
     void later() { h.removeCallbacks(retry); if (wanted()) h.postDelayed(retry, 5000); }
 
