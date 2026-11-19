@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>App Hike Connexion</title>
+<style>
+/* App Hike look: same colours (light/dark from the system), cards, buttons and switches */
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mu:#6b6a64;--ln:#e2e0d8;--a:#2f6f5e;--b:#d9822b;--ok:#22a05a;--wa:#f08214;--st:#a8472f;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#171815;--card:#222320;--tx:#efeee8;--mu:#a09f97;--ln:#34352f;--a:#5fb59e;--b:#f0a45a;--st:#b9553d;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;padding:14px 14px 30px}
+header{display:flex;align-items:center;gap:10px;margin:4px 2px 14px}
+header svg{flex:none}
+header h1{margin:0;font-size:1.45rem;line-height:1.1}
+header small{display:block;color:var(--mu);font-size:.8rem;font-weight:400}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:14px;margin-bottom:14px}
+.h2i{display:flex;align-items:center;gap:8px;font-size:1.1rem;font-weight:700;margin:0 0 6px}
+.h2i svg{flex:none}
+p,.note{margin:6px 0 0;color:var(--mu);font-size:.88rem}
+button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:var(--a);color:#fff;font:inherit;font-weight:600}
+button.sec{background:none;color:var(--a);border:1.5px solid var(--a)}
+button.stop{background:var(--st)}
+.row{display:flex;gap:8px}.row button{flex:1}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);color:var(--tx);border:1px solid var(--ln);text-align:left;font-weight:600;margin-top:10px;padding:10px 12px}
+.tog .sw{flex:none;position:relative;width:46px;height:26px;border-radius:13px;background:var(--ln);transition:background .15s}
+.tog .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.tog[aria-pressed="true"] .sw{background:var(--a)}.tog[aria-pressed="true"] .sw::after{transform:translateX(20px)}
+.tog.ok{border-color:var(--ok)}.tog.wa{border-color:var(--wa)}
+.st{display:flex;align-items:center;gap:8px;font-weight:600;margin-top:8px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mu);flex:none}.dot.ok{background:var(--ok)}.dot.wa{background:var(--wa)}.dot.ko{background:var(--st)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.9rem;margin-top:8px}.kv span{color:var(--mu)}.kv b{font-variant-numeric:tabular-nums;word-break:break-word}
+details{margin-top:12px;border-top:1px solid var(--ln);padding-top:6px}
+details summary{font-size:.95rem;font-weight:600;cursor:pointer;padding:4px 0}
+.ck{display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:.95rem}
+.ck input{margin-top:3px;width:18px;height:18px;accent-color:var(--a);flex:none}
+.ck small{display:block;color:var(--mu);font-size:.8rem}
+.fl{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;font-size:.95rem}
+.fl small{display:block;color:var(--mu);font-size:.8rem}
+select,input[type=text],input[type=number]{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--ln);border-radius:10px;padding:8px 10px;min-width:0}
+input[type=number]{width:90px;text-align:center}input[type=text]{width:100%}
+.stp{display:flex;align-items:center;gap:6px}.stp button{width:40px;margin:0;padding:6px 0;background:var(--b)}.stp b{min-width:56px;text-align:center;font-variant-numeric:tabular-nums}
+.tip{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--ln);font-size:.85rem}
+pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1px solid var(--ln);border-radius:10px;padding:8px;font-size:.7rem;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+<header>
+<svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><rect x=".5" y=".5" width="23" height="23" rx="6" fill="#3B2A22"/><path d="M7.4 8.3 15.7 15.4 12 19V5l3.7 3.6L7.4 15.7" fill="none" stroke="#F2A93B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<h1>App Hike Connexion<small id="ver"></small></h1>
+</header>
+
+<section class="card">
+<div class="h2i"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7.5 17 17l-5 5V2l5 5L6.5 16.5"/></svg>Connexion App Hike</div>
+<div class="st"><span class="dot" id="pdot"></span><span id="ptxt">—</span></div>
+<div class="kv" id="pkv"></div>
+<p>App Hike, ouverte dans Chrome avec l’option « Se connecter par App Hike Connexion », se connecte au tapis et à la ceinture par cette app.</p>
+<button type="button" id="prun" class="sec"></button>
+</section>
+
+<section class="card">
+<div class="h2i"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 9v3l2 1M9 3h6M9 21h6"/></svg>Émission vers la montre</div>
+<button type="button" class="tog" id="wtog" aria-pressed="false"><span>Émettre vers la montre</span><span class="sw"></span></button>
+<div class="st"><span class="dot" id="wdot"></span><span id="wtxt">—</span></div>
+<div class="kv" id="wkv"></div>
+<div class="tip">Suunto Vertical : Réglages → Connectivité → Associer un capteur → <b>Foulée</b> (Foot POD), téléphone à côté de la montre, émission active. Le capteur de foulée ne transmet que la vitesse ; l’inclinaison n’existe que dans le profil tapis (FTMS), que la montre n’accepte peut-être pas. Chaque essai est noté dans le journal.</div>
+
+<details><summary>Valeurs envoyées</summary>
+<label class="ck"><input type="radio" name="src" data-k="src" value="tapis"><span>Valeurs du tapis<small>vitesse et inclinaison mesurées par le tapis connecté</small></span></label>
+<label class="ck"><input type="radio" name="src" data-k="src" value="test"><span>Valeurs de test<small>pour essayer sans faire tourner le tapis</small></span></label>
+<div class="fl"><span>Vitesse de test</span><span class="stp"><button type="button" data-step="tSp" data-d="-0.5">−</button><b id="tSpv"></b><button type="button" data-step="tSp" data-d="0.5">+</button></span></div>
+<div class="fl"><span>Inclinaison de test</span><span class="stp"><button type="button" data-step="tInc" data-d="-1">−</button><b id="tIncv"></b><button type="button" data-step="tInc" data-d="1">+</button></span></div>
+</details>
+
+<details><summary>Profils Bluetooth présentés</summary>
+<label class="ck"><input type="checkbox" data-k="rsc"><span>Capteur de foulée (RSC, 0x1814)<small>accepté par la plupart des montres : vitesse, cadence, distance</small></span></label>
+<label class="ck"><input type="checkbox" data-k="csc"><span>Capteur de vitesse vélo (CSC, 0x1816)<small>vitesse calculée à partir de tours de roue</small></span></label>
+<label class="ck"><input type="checkbox" data-k="ftms"><span>Tapis de course (FTMS, 0x1826)<small>vitesse et inclinaison, si la montre gère les tapis</small></span></label>
+<label class="ck"><input type="checkbox" data-k="dis"><span>Informations de l’appareil (0x180A)<small>fabricant, modèle, version</small></span></label>
+<label class="ck"><input type="checkbox" data-k="bas"><span>Batterie (0x180F)<small>certaines montres la lisent avant d’accepter un capteur</small></span></label>
+</details>
+
+<details><summary>Annonce Bluetooth</summary>
+<div class="fl" style="display:block"><span>Nom annoncé<small>vide : nom Bluetooth du téléphone ; sinon le nom du téléphone est changé pendant l’émission puis rétabli</small></span><input type="text" data-k="name" placeholder="ex. AppHike Pod" style="margin-top:6px"></div>
+<label class="ck"><input type="checkbox" data-k="nameMain"><span>Nom dans l’annonce principale<small>sinon dans la réponse au scan</small></span></label>
+<label class="ck"><input type="checkbox" data-k="advAll"><span>Annoncer tous les profils<small>décoché : seulement le premier (foulée, sinon vélo, sinon tapis)</small></span></label>
+<label class="ck"><input type="checkbox" data-k="advFast"><span>Annonce rapide<small>visible plus vite, consomme un peu plus</small></span></label>
+<label class="ck"><input type="checkbox" data-k="txHigh"><span>Puissance d’émission élevée</span></label>
+</details>
+
+<details><summary>Capteur de foulée (RSC)</summary>
+<div class="fl"><span>Cadence envoyée</span><select data-k="cadMode"><option value="estimee">estimée d’après la vitesse</option><option value="fixe">valeur fixe</option><option value="zero">0</option></select></div>
+<div class="fl"><span>Cadence fixe (pas/min)</span><input type="number" data-k="cadFix" min="0" max="250"></div>
+<label class="ck"><input type="checkbox" data-k="cadHalf"><span>Cadence en foulées (÷ 2)<small>certaines montres comptent un seul pied</small></span></label>
+<label class="ck"><input type="checkbox" data-k="stride"><span>Longueur de foulée</span></label>
+<label class="ck"><input type="checkbox" data-k="dist"><span>Distance totale</span></label>
+<div class="fl"><span>Course ou marche</span><select data-k="running"><option value="auto">auto (course dès 7,5 km/h)</option><option value="non">toujours marche</option><option value="oui">toujours course</option></select></div>
+<div class="fl"><span>Position du capteur</span><select data-k="loc"><option value="0">autre</option><option value="1">dessus de la chaussure</option><option value="2">dans la chaussure</option><option value="3">hanche</option><option value="5">talon</option></select></div>
+<label class="ck"><input type="checkbox" data-k="scCp"><span>Point de contrôle (calibration)<small>présent sur certains capteurs du commerce</small></span></label>
+</details>
+
+<details><summary>Tapis (FTMS)</summary>
+<div class="fl"><span>Données envoyées</span><select data-k="ftFields"><option value="vitesse">vitesse</option><option value="vitesse+inclinaison">vitesse + inclinaison</option><option value="vitesse+inclinaison+distance">+ distance</option><option value="complet">+ distance, D+, temps</option></select></div>
+<label class="ck"><input type="checkbox" data-k="ftCp"><span>Point de contrôle et état machine</span></label>
+<label class="ck"><input type="checkbox" data-k="ftRanges"><span>Plages de vitesse et d’inclinaison</span></label>
+<label class="ck"><input type="checkbox" data-k="ftTrain"><span>État d’entraînement</span></label>
+</details>
+
+<details><summary>Vélo (CSC)</summary>
+<div class="fl"><span>Circonférence de roue (mm)<small>à reporter dans la montre</small></span><input type="number" data-k="wheel" min="500" max="3000"></div>
+</details>
+
+<details><summary>Sécurité et rythme</summary>
+<label class="ck"><input type="checkbox" data-k="secure"><span>Exiger le chiffrement<small>déclenche un appairage Bluetooth avec la montre</small></span></label>
+<div class="fl"><span>Envoi des données</span><select data-k="period"><option value="250">4 fois par seconde</option><option value="500">2 fois par seconde</option><option value="1000">1 fois par seconde</option><option value="2000">toutes les 2 s</option></select></div>
+</details>
+</section>
+
+<section class="card">
+<div class="h2i">Journal</div>
+<pre id="log"></pre>
+<div class="row"><button type="button" class="sec" id="lcp">Copier</button><button type="button" class="sec" id="lsh">Partager</button><button type="button" class="sec" id="lcl">Effacer</button></div>
+</section>
+
+<script>
+const $=id=>document.getElementById(id),A=window.AHC;let S={},O=null,logTxt="";
+const f1=x=>(+x).toFixed(1).replace(".",",");
+const kv=(el,rows)=>{el.innerHTML="";for(const [k,v] of rows){const a=document.createElement("span");a.textContent=k;const b=document.createElement("b");b.textContent=v;el.append(a,b)}};
+function save(){A.setOpts(JSON.stringify(O))}
+function fill(){document.querySelectorAll("[data-k]").forEach(e=>{const k=e.dataset.k,v=O[k];if(e.type==="checkbox")e.checked=!!v;else if(e.type==="radio")e.checked=String(v)===e.value;else if(document.activeElement!==e)e.value=v==null?"":v});$("tSpv").textContent=f1(O.tSp)+" km/h";$("tIncv").textContent=Math.round(O.tInc)+" %"}
+document.addEventListener("change",e=>{const el=e.target,k=el.dataset&&el.dataset.k;if(!k||!O)return;let v=el.type==="checkbox"?el.checked:el.value;if(el.type==="number"||k==="loc"||k==="period")v=+v;if(el.type==="radio"&&!el.checked)return;O[k]=v;save()});
+document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{const k=b.dataset.step;let v=(+O[k])+(+b.dataset.d);v=k==="tSp"?Math.max(0,Math.min(20,v)):Math.max(-5,Math.min(40,v));O[k]=Math.round(v*10)/10;fill();save()});
+$("prun").onclick=()=>A.pont(!(S.pont&&S.pont.on));
+$("wtog").onclick=()=>A.watch(!S.watchOn);
+$("lcp").onclick=()=>A.copy(logTxt);$("lsh").onclick=()=>A.share(logTxt);$("lcl").onclick=()=>{A.clearLog();$("log").textContent=""};
+function draw(){
+try{S=JSON.parse(A.state())}catch(e){return}
+$("ver").textContent="version "+(S.version||"?");
+if(!O){O=S.opts||{};fill()}
+const P=S.pont||{};$("pdot").className="dot "+(!P.on?"":P.page?"ok":"wa");
+$("ptxt").textContent=!S.perm?"Autorisation « Appareils à proximité » à accorder":!P.on?"Arrêtée":P.page?"App Hike connectée":"Active, en attente d’App Hike";
+kv($("pkv"),P.on?[["Appareils connectés",P.devices||"aucun"]].concat(P.error?[["Problème",P.error]]:[]):[]);
+$("prun").textContent=!S.perm?"Accorder les autorisations":P.on?"Arrêter App Hike Connexion":"Démarrer App Hike Connexion";if(!S.perm)$("prun").onclick=()=>A.perms();else $("prun").onclick=()=>A.pont(!P.on);
+const W=S.watch||{},on=!!S.watchOn;$("wtog").setAttribute("aria-pressed",on);
+const cl=W.clients||[],sub=cl.some(c=>c.subs);$("wtog").className="tog"+(on&&W.adv?(sub?" ok":" wa"):"");
+$("wdot").className="dot "+(!on?"":W.error?"ko":!W.adv?"wa":sub?"ok":"wa");
+$("wtxt").textContent=!on?"Émission désactivée":!P.on?"Démarre App Hike Connexion pour émettre":W.error?"Problème : "+W.error:!W.adv?"Démarrage de l’émission…":sub?"Montre abonnée : données envoyées":cl.length?"Montre connectée, pas encore abonnée":"Émission en cours, en attente de la montre";
+const rows=[];if(on&&W.adv)rows.push(["Nom annoncé",W.name||"—"]);
+for(const c of cl)rows.push(["Connecté",c.name+(c.subs?" · abonné à "+c.subs:"")]);
+if(on)rows.push(["Valeurs",W.live?f1(W.sp)+" km/h · "+f1(W.inc)+" % · cadence "+W.cad:(O&&O.src==="test"?"—":"pas de mesure du tapis")]);
+if(on)rows.push(["Envois",String(W.sent||0)]);
+kv($("wkv"),rows);
+if(S.log!==logTxt){const box=$("log"),bottom=box.scrollTop+box.clientHeight>=box.scrollHeight-20;logTxt=S.log||"";box.textContent=logTxt||"(vide)";if(bottom)box.scrollTop=box.scrollHeight}}
+if(A){draw();setInterval(draw,700)}else document.body.insertAdjacentHTML("afterbegin","<p>Aperçu sans l’app.</p>");
+</script>
+</body>
+</html>

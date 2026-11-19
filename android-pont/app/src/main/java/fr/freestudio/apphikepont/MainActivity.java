@@ -1,81 +1,134 @@
 package fr.freestudio.apphikepont;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
+import android.content.res.Configuration;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
+import android.view.WindowInsetsController;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Toast;
+
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Bridge screen: permissions, start/stop, status and log. The bridge itself is PontService. */
+/**
+ * App Hike Connexion screen, with the App Hike look (local page assets/ui.html): connection state, watch emission
+ * and its test options, log. The bridge and the watch server run in PontService.
+ */
 public class MainActivity extends Activity {
     final Handler h = new Handler(Looper.getMainLooper());
-    TextView tvState, tvLog;
-    Button bRun;
-    ScrollView sv;
+    WebView web;
+    SharedPreferences wp;
 
-    int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density); }
+    boolean dark() { return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES; }
 
+    void bars() {
+        int c = dark() ? Color.parseColor("#171815") : Color.parseColor("#F6F5F1");
+        getWindow().setStatusBarColor(c);
+        getWindow().setNavigationBarColor(c);
+        if (Build.VERSION.SDK_INT >= 30 && getWindow().getInsetsController() != null) {
+            int m = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            getWindow().getInsetsController().setSystemBarsAppearance(dark() ? 0 : m, m);
+        } else getWindow().getDecorView().setSystemUiVisibility(dark() ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    }
+
+    class Bridge {
+        @JavascriptInterface public String state() {
+            try {
+                PontService s = PontService.instance;
+                JSONObject st = new JSONObject();
+                String v;
+                try { v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { v = "?"; }
+                st.put("version", v);
+                st.put("pont", new JSONObject().put("on", s != null).put("page", s != null && s.page).put("devices", s != null && s.ble != null ? s.ble.connectedNames() : "").put("error", s != null ? s.error : ""));
+                st.put("watchOn", wp.getBoolean("on", false));
+                st.put("watch", s != null && s.watch != null ? s.watch.state() : new JSONObject().put("on", false));
+                JSONObject o = WatchServer.defaults(), saved = PontService.loadOptions(MainActivity.this);
+                for (java.util.Iterator<String> it = saved.keys(); it.hasNext(); ) { String k = it.next(); o.put(k, saved.get(k)); }
+                st.put("opts", o);
+                StringBuilder b = new StringBuilder();
+                synchronized (PontService.LOG) { for (String l : PontService.LOG) b.append(l).append('\n'); }
+                st.put("log", b.toString());
+                st.put("perm", btGranted());
+                return st.toString();
+            } catch (Exception e) { return "{}"; }
+        }
+        @JavascriptInterface public void pont(boolean on) { h.post(() -> { if (on) start(); else stopService(new Intent(MainActivity.this, PontService.class)); }); }
+        @JavascriptInterface public void watch(boolean on) {
+            h.post(() -> {
+                wp.edit().putBoolean("on", on).apply();
+                PontService s = PontService.instance;
+                if (on) { if (s == null) start(); else if (s.watch != null) s.watch.start(); }
+                else if (s != null && s.watch != null) s.watch.stop();
+            });
+        }
+        @JavascriptInterface public void setOpts(String json) {
+            h.post(() -> {
+                try {
+                    JSONObject o = new JSONObject(json);
+                    wp.edit().putString("opts", o.toString()).apply();
+                    PontService s = PontService.instance;
+                    if (s != null && s.watch != null) s.watch.setOptions(o);
+                } catch (Exception ignored) { }
+            });
+        }
+        @JavascriptInterface public void copy(String text) {
+            h.post(() -> {
+                ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("journal", text));
+                Toast.makeText(MainActivity.this, "Journal copié", Toast.LENGTH_SHORT).show();
+            });
+        }
+        @JavascriptInterface public void share(String text) {
+            h.post(() -> startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Partager le journal")));
+        }
+        @JavascriptInterface public void clearLog() { synchronized (PontService.LOG) { PontService.LOG.clear(); } }
+        @JavascriptInterface public void perms() { h.post(MainActivity.this::start); }
+    }
+
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(32), dp(16), dp(12));
-        TextView t = new TextView(this);
-        t.setText("App Hike Connexion");
-        t.setTextSize(22);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        root.addView(t);
-        TextView help = new TextView(this);
-        help.setText("Laisse App Hike Connexion active (notification « App Hike Connexion active »), puis ouvre App Hike dans Chrome avec l'option « Se connecter par App Hike Connexion » cochée. Le tapis et la ceinture se connectent ici, à la demande d'App Hike.");
-        help.setTextSize(14);
-        help.setPadding(0, dp(8), 0, dp(8));
-        root.addView(help);
-        tvState = new TextView(this);
-        tvState.setTextSize(16);
-        tvState.setTypeface(Typeface.DEFAULT_BOLD);
-        root.addView(tvState);
-        bRun = new Button(this);
-        bRun.setAllCaps(false);
-        bRun.setOnClickListener(v -> { if (PontService.instance != null) stopService(new Intent(this, PontService.class)); else start(); h.postDelayed(this::ui, 400); });
-        root.addView(bRun);
-        TextView lt = new TextView(this);
-        lt.setText("Journal");
-        lt.setAlpha(.7f);
-        lt.setPadding(0, dp(10), 0, 0);
-        root.addView(lt);
-        sv = new ScrollView(this);
-        tvLog = new TextView(this);
-        tvLog.setTypeface(Typeface.MONOSPACE);
-        tvLog.setTextSize(10.5f);
-        tvLog.setTextIsSelectable(true);
-        sv.addView(tvLog);
-        root.addView(sv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-        setContentView(root);
-        PontService.onChange = this::ui;
+        wp = getSharedPreferences("watch", MODE_PRIVATE);
+        bars();
+        web = new WebView(this);
+        web.setBackgroundColor(dark() ? Color.parseColor("#171815") : Color.parseColor("#F6F5F1"));
+        WebSettings ws = web.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setTextZoom(100);
+        web.addJavascriptInterface(new Bridge(), "AHC");
+        web.setWebViewClient(new WebViewClient());
+        web.loadUrl("file:///android_asset/ui.html");
+        setContentView(web);
         start();
         backToChrome(getIntent());
     }
+
+    @Override public void onConfigurationChanged(Configuration c) { super.onConfigurationChanged(c); bars(); }
 
     /** Opened by App Hike's "Lancer App Hike Connexion" button: once the service runs, go back to Chrome. */
     void backToChrome(Intent i) {
         if (i == null || !Intent.ACTION_VIEW.equals(i.getAction()) || i.getData() == null || !"apphikeconnexion".equals(i.getData().getScheme())) return;
         setIntent(new Intent(this, MainActivity.class));
-        if (needed().length == 0 || btGranted()) h.postDelayed(() -> moveTaskToBack(true), 600);
+        if (needed().length == 0) h.postDelayed(() -> moveTaskToBack(true), 600);
     }
 
     @Override protected void onNewIntent(Intent i) {
@@ -84,12 +137,9 @@ public class MainActivity extends Activity {
         backToChrome(i);
     }
 
-    @Override protected void onResume() { super.onResume(); PontService.onChange = this::ui; ui(); }
-    @Override protected void onDestroy() { PontService.onChange = null; super.onDestroy(); }
-
     String[] needed() {
         List<String> p = new ArrayList<>();
-        if (Build.VERSION.SDK_INT >= 31) { p.add(Manifest.permission.BLUETOOTH_SCAN); p.add(Manifest.permission.BLUETOOTH_CONNECT); }
+        if (Build.VERSION.SDK_INT >= 31) { p.add(Manifest.permission.BLUETOOTH_SCAN); p.add(Manifest.permission.BLUETOOTH_CONNECT); p.add(Manifest.permission.BLUETOOTH_ADVERTISE); }
         else p.add(Manifest.permission.ACCESS_FINE_LOCATION);
         if (Build.VERSION.SDK_INT >= 33) p.add(Manifest.permission.POST_NOTIFICATIONS);
         List<String> miss = new ArrayList<>();
@@ -108,22 +158,12 @@ public class MainActivity extends Activity {
         BluetoothAdapter a = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
         if (a != null && !a.isEnabled()) { try { startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)); } catch (Exception ignored) { } }
         startForegroundService(new Intent(this, PontService.class));
-        h.postDelayed(this::ui, 400);
     }
 
     @Override public void onRequestPermissionsResult(int rc, String[] p, int[] r) {
-        if (btGranted()) { startForegroundService(new Intent(this, PontService.class)); h.postDelayed(this::ui, 400); }
-        else { PontService.addLog("autorisation « Appareils à proximité » refusée : App Hike Connexion ne peut pas fonctionner"); ui(); }
+        if (btGranted()) startForegroundService(new Intent(this, PontService.class));
+        else PontService.addLog("autorisation « Appareils à proximité » refusée : App Hike Connexion ne peut pas fonctionner");
     }
 
-    void ui() {
-        PontService s = PontService.instance;
-        tvState.setText(s == null ? "○ App Hike Connexion arrêtée" : "● " + s.status());
-        tvState.setTextColor(s == null ? 0xFF9E9E9E : s.page ? 0xFF43A047 : 0xFFFB8C00);
-        bRun.setText(s == null ? "Démarrer" : "Arrêter");
-        StringBuilder b = new StringBuilder();
-        synchronized (PontService.LOG) { for (String l : PontService.LOG) b.append(l).append('\n'); }
-        tvLog.setText(b);
-        sv.post(() -> sv.fullScroll(View.FOCUS_DOWN));
-    }
+    @Override protected void onDestroy() { if (web != null) web.destroy(); super.onDestroy(); }
 }
