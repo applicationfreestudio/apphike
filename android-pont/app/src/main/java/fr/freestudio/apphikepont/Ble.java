@@ -136,7 +136,14 @@ class Ble {
     }
 
     void watch(String id, boolean on) {
-        if (on) { watched.add(id); lastAdv.remove(id); startScan(); }
+        if (on) {
+            watched.add(id); lastAdv.remove(id); startScan();
+            // a device already connected here no longer advertises: the page is told at once that it is reachable
+            Conn c = conns.get(id);
+            if (c != null && c.connected) h.postDelayed(() -> {
+                if (watched.contains(id)) try { out.event(new JSONObject().put("t", "adv").put("id", id).put("rssi", 0)); } catch (Exception ignored) { }
+            }, 100);
+        }
         else { watched.remove(id); maybeStop(); }
     }
 
