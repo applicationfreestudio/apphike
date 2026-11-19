@@ -17,6 +17,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.net.Uri;
 import android.view.View;
 import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
@@ -116,7 +117,8 @@ public class MainActivity extends Activity {
         ws.setTextZoom(100);
         web.addJavascriptInterface(new Bridge(), "AHC");
         web.setWebViewClient(new WebViewClient());
-        web.loadUrl("file:///android_asset/ui.html" + (getIntent() != null && getIntent().getBooleanExtra("complet", false) ? "#complet" : ""));
+        String sp = splashHash(getIntent());
+        web.loadUrl("file:///android_asset/ui.html" + (sp != null ? sp : getIntent() != null && getIntent().getBooleanExtra("complet", false) ? "#complet" : ""));
         setContentView(web);
         start();
         backToChrome(getIntent());
@@ -124,16 +126,32 @@ public class MainActivity extends Activity {
 
     @Override public void onConfigurationChanged(Configuration c) { super.onConfigurationChanged(c); bars(); }
 
-    /** Opened by App Hike's "Lancer App Hike Connexion" button: once the service runs, go back to Chrome. */
+    static boolean fromAppHike(Intent i) { return i != null && Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null && "apphikeconnexion".equals(i.getData().getScheme()); }
+
+    /** Short welcome screen when opened by App Hike: logo and the devices chosen in App Hike (names passed in the link). */
+    String splashHash(Intent i) {
+        if (!fromAppHike(i) || needed().length > 0) return null;
+        Uri u = i.getData();
+        String tm = u.getQueryParameter("tm"), hr = u.getQueryParameter("hr");
+        return "#splash&tm=" + Uri.encode(tm == null ? "" : tm) + "&hr=" + Uri.encode(hr == null ? "" : hr);
+    }
+
+    /** Opened by App Hike's "Lancer App Hike Connexion" button: welcome screen for 2.5 s, then back to Chrome. */
     void backToChrome(Intent i) {
-        if (i == null || !Intent.ACTION_VIEW.equals(i.getAction()) || i.getData() == null || !"apphikeconnexion".equals(i.getData().getScheme())) return;
+        if (!fromAppHike(i)) return;
         setIntent(new Intent(this, MainActivity.class));
-        if (needed().length == 0) h.postDelayed(() -> moveTaskToBack(true), 600);
+        if (needed().length > 0) return;
+        h.postDelayed(() -> {
+            moveTaskToBack(true);
+            h.postDelayed(() -> { if (web != null) web.evaluateJavascript("window.splashOff&&splashOff()", null); }, 400);
+        }, 2500);
     }
 
     @Override protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
         if (i != null && i.getBooleanExtra("complet", false) && web != null) web.evaluateJavascript("window.complet&&complet()", null);
+        String sp = splashHash(i);
+        if (sp != null && web != null) web.evaluateJavascript("window.splashOn&&splashOn(" + JSONObject.quote(sp) + ")", null);
         if (PontService.instance == null) start();
         backToChrome(i);
     }
