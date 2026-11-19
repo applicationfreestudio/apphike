@@ -76,7 +76,7 @@ public class WatchServer {
         try {
             return new JSONObject()
                     .put("src", "tapis").put("tSp", 5.0).put("tInc", 8.0)
-                    .put("tHr", 120).put("hrContact", true).put("rsc", true).put("hr", false).put("ftms", false).put("csc", false).put("dis", true).put("bas", true)
+                    .put("tHr", 120).put("hrContact", true).put("rsc", false).put("hr", true).put("ftms", true).put("csc", false).put("dis", true).put("bas", true)
                     .put("name", "").put("advFirst", "tapis").put("nameMain", true).put("advAll", true).put("txHigh", true).put("advFast", true)
                     .put("secure", false).put("period", 1000)
                     .put("cadMode", "estimee").put("cadFix", 160).put("cadHalf", false).put("stride", true).put("dist", true).put("running", "auto").put("loc", 2).put("scCp", false)

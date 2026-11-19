@@ -32,6 +32,7 @@ button.stop{background:var(--st)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.9rem;margin-top:8px}.kv span{color:var(--mu)}.kv b{font-variant-numeric:tabular-nums;word-break:break-word}
 details{margin-top:12px;border-top:1px solid var(--ln);padding-top:6px}
 details summary{font-size:.95rem;font-weight:600;cursor:pointer;padding:4px 0}
+details.card{border-top:1px solid var(--ln);padding-top:14px;margin-top:0}details.card>summary.srvs{font-size:1.1rem;font-weight:700;margin:0;padding:0;list-style:none;display:flex;align-items:center;gap:8px}details.card>summary.srvs::-webkit-details-marker{display:none}details.card>summary.srvs::after{content:"▾";color:var(--mu);transition:transform .15s}details.card:not([open])>summary.srvs::after{transform:rotate(-90deg)}details.card[open]>summary.srvs{margin-bottom:6px}
 .ck{display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:.95rem}
 .ck input{margin-top:3px;width:18px;height:18px;accent-color:var(--a);flex:none}
 .ck small{display:block;color:var(--mu);font-size:.8rem}
@@ -58,24 +59,15 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 <button type="button" id="prun" class="sec"></button>
 </section>
 
-<section class="card">
-<div class="h2i"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Ceinture cardio</div>
-<button type="button" class="tog" id="btog" aria-pressed="false"><span id="bnm">Ceinture</span><span class="sw"></span></button>
-<div class="st"><span class="dot" id="bdot"></span><span id="btxt">—</span></div>
-<div id="blist"></div>
-<button type="button" class="sec" id="bscan">Choisir la ceinture</button>
-<p>App Hike Connexion se connecte elle-même à la ceinture et relaie sa fréquence à la montre (profil cardio coché, « Valeurs réelles »). Ainsi la ceinture n’a qu’une connexion, avec le téléphone.</p>
-</section>
-
-<section class="card">
-<div class="h2i"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 9v3l2 1M9 3h6M9 21h6"/></svg>Émission vers la montre</div>
-<button type="button" class="tog" id="wtog" aria-pressed="false"><span>Émettre vers la montre</span><span class="sw"></span></button>
+<details class="card" id="srv">
+<summary class="h2i srvs"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7.5 17 17l-5 5V2l5 5L6.5 16.5"/></svg><span style="flex:1">Serveur Bluetooth de données</span><span class="dot" id="sdot"></span></summary>
+<button type="button" class="tog" id="wtog" aria-pressed="false"><span>Activer le serveur</span><span class="sw"></span></button>
 <div class="st"><span class="dot" id="wdot"></span><span id="wtxt">—</span></div>
 <div class="kv" id="wkv"></div>
-<div class="tip">Suunto Vertical : Réglages → Connectivité → Associer un capteur → <b>Foulée</b> (Foot POD), téléphone à côté de la montre, émission active. Le capteur de foulée ne transmet que la vitesse ; l’inclinaison n’existe que dans le profil tapis (FTMS), que la montre n’accepte peut-être pas. Chaque essai est noté dans le journal.</div>
+<div class="tip">Le téléphone se présente comme un tapis (FTMS : vitesse et inclinaison) et comme un capteur cardio (fréquence de la ceinture connectée par App Hike). Sur la Suunto, l’extension Treadmill Link lit le tapis ; le cardio s’associe dans Réglages → Connectivité → Associer un capteur. Chaque échange est noté dans le journal.</div>
 
 <details><summary>Valeurs envoyées</summary>
-<label class="ck"><input type="radio" name="src" data-k="src" value="tapis"><span>Valeurs réelles<small>vitesse et inclinaison du tapis, fréquence de la ceinture</small></span></label>
+<label class="ck"><input type="radio" name="src" data-k="src" value="tapis"><span>Valeurs réelles<small>vitesse et inclinaison du tapis, fréquence de la ceinture (connectés par App Hike)</small></span></label>
 <label class="ck"><input type="radio" name="src" data-k="src" value="test"><span>Valeurs de test<small>pour essayer sans faire tourner le tapis</small></span></label>
 <div class="fl"><span>Vitesse de test</span><span class="stp"><button type="button" data-step="tSp" data-d="-0.5">−</button><b id="tSpv"></b><button type="button" data-step="tSp" data-d="0.5">+</button></span></div>
 <div class="fl"><span>Cardio de test</span><span class="stp"><button type="button" data-step="tHr" data-d="-5">−</button><b id="tHrv"></b><button type="button" data-step="tHr" data-d="5">+</button></span></div>
@@ -126,7 +118,7 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 <label class="ck"><input type="checkbox" data-k="secure"><span>Exiger le chiffrement (appairage)<small>la montre s’appaire au téléphone et peut ensuite le retrouver même si son adresse Bluetooth change ; refais l’association après l’avoir coché</small></span></label>
 <div class="fl"><span>Envoi des données</span><select data-k="period"><option value="250">4 fois par seconde</option><option value="500">2 fois par seconde</option><option value="1000">1 fois par seconde</option><option value="2000">toutes les 2 s</option></select></div>
 </details>
-</section>
+</details>
 
 <section class="card">
 <div class="h2i">Journal</div>
@@ -144,9 +136,6 @@ document.addEventListener("change",e=>{const el=e.target,k=el.dataset&&el.datase
 document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{const k=b.dataset.step;let v=(+O[k])+(+b.dataset.d);v=k==="tSp"?Math.max(0,Math.min(20,v)):k==="tHr"?Math.max(40,Math.min(220,v)):Math.max(-5,Math.min(40,v));O[k]=Math.round(v*10)/10;fill();save()});
 $("prun").onclick=()=>A.pont(!(S.pont&&S.pont.on));
 $("wtog").onclick=()=>A.watch(!S.watchOn);
-$("btog").onclick=()=>A.beltOn(!(S.belt&&S.belt.on));
-$("bscan").onclick=()=>A.beltScan(!(S.belt&&S.belt.scanning));
-$("blist").addEventListener("click",e=>{const b=e.target.closest("[data-id]");if(b)A.beltPick(b.dataset.id,b.dataset.name||"")});
 $("lcp").onclick=()=>A.copy(logTxt);$("lsh").onclick=()=>A.share(logTxt);$("lcl").onclick=()=>{A.clearLog();$("log").textContent=""};
 function draw(){
 try{S=JSON.parse(A.state())}catch(e){return}
@@ -156,21 +145,18 @@ const P=S.pont||{};$("pdot").className="dot "+(!P.on?"":P.page?"ok":"wa");
 $("ptxt").textContent=!S.perm?"Autorisation « Appareils à proximité » à accorder":!P.on?"Arrêtée":P.page?"App Hike connectée":"Active, en attente d’App Hike";
 kv($("pkv"),P.on?[["Appareils connectés",P.devices||"aucun"]].concat(P.error?[["Problème",P.error]]:[]):[]);
 $("prun").textContent=!S.perm?"Accorder les autorisations":P.on?"Arrêter App Hike Connexion":"Démarrer App Hike Connexion";if(!S.perm)$("prun").onclick=()=>A.perms();else $("prun").onclick=()=>A.pont(!P.on);
-const B=S.belt||{};$("bnm").textContent=B.name||B.addr?"Ceinture : "+(B.name||B.addr):"Aucune ceinture choisie";$("btog").setAttribute("aria-pressed",!!B.on);$("btog").className="tog"+(B.on?(B.connected?" ok":" wa"):"");$("btog").disabled=!B.addr;
-$("bdot").className="dot "+(!B.on?"":B.connected?"ok":"wa");$("btxt").textContent=!P.on?"Démarre App Hike Connexion":!B.addr?"Choisis ta ceinture ci-dessous":!B.on?"Relais désactivé":B.connected?(B.bpm?B.bpm+" bpm":"connectée, en attente de valeur"):(B.status||"recherche…");
-$("bscan").textContent=B.scanning?"Arrêter la recherche":"Choisir la ceinture";
-{const L=$("blist"),f=B.scanning?(B.found||[]):[];const key=JSON.stringify(f);if(L._k!==key){L._k=key;L.innerHTML="";if(B.scanning&&!f.length)L.innerHTML='<p>Recherche des ceintures… Porte-la (elle s’allume au contact de la peau).</p>';for(const x of f){const b=document.createElement("button");b.type="button";b.className="sec";b.dataset.id=x.id;b.dataset.name=x.name||"";b.style.textAlign="left";b.innerHTML="<b></b><br><small></small>";b.querySelector("b").textContent=x.name||"Appareil sans nom";b.querySelector("small").textContent=x.id;L.appendChild(b)}}}
 const W=S.watch||{},on=!!S.watchOn;$("wtog").setAttribute("aria-pressed",on);
 const cl=W.clients||[],sub=cl.some(c=>c.subs);$("wtog").className="tog"+(on&&W.adv?(sub?" ok":" wa"):"");
-$("wdot").className="dot "+(!on?"":W.error?"ko":!W.adv?"wa":sub?"ok":"wa");
-$("wtxt").textContent=!on?"Émission désactivée":!P.on?"Démarre App Hike Connexion pour émettre":W.error?"Problème : "+W.error:!W.adv?"Démarrage de l’émission…":sub?"Montre abonnée : données envoyées":cl.length?"Liaison ouverte, aucun abonnement au capteur":"Émission en cours, en attente de la montre";
+const wd="dot "+(!on?"":W.error?"ko":!W.adv?"wa":sub?"ok":"wa");
+$("wdot").className=wd;$("sdot").className=wd;$("wtxt").textContent=!on?"Serveur désactivé":!P.on?"Démarre App Hike Connexion":W.error?"Problème : "+W.error:!W.adv?"Démarrage du serveur…":sub?"Montre abonnée : données envoyées":cl.length?"Liaison ouverte, aucun abonnement au capteur":"Serveur actif, en attente d’un appareil";
 const rows=[];if(on&&W.adv)rows.push(["Nom annoncé",W.name||"—"]);
 for(const c of cl)rows.push([c.subs?"Abonné":"Liaison",c.name+(c.subs?" · "+c.subs:"")]);
 if(on)rows.push(["Valeurs",(W.live?f1(W.sp)+" km/h · "+f1(W.inc)+" % · cadence "+W.cad:(O&&O.src==="test"?"—":"pas de mesure du tapis"))+(O&&O.hr?" · cardio "+(W.hr||"—"):"")]);
 if(on)rows.push(["Envois",String(W.sent||0)]);
 kv($("wkv"),rows);
 if(S.log!==logTxt){const box=$("log"),bottom=box.scrollTop+box.clientHeight>=box.scrollHeight-20;logTxt=S.log||"";box.textContent=logTxt||"(vide)";if(bottom)box.scrollTop=box.scrollHeight}}
-if(A){draw();setInterval(draw,700)}else document.body.insertAdjacentHTML("afterbegin","<p>Aperçu sans l’app.</p>");
+window.complet=()=>{const d=$("srv");d.open=true;d.querySelectorAll("details").forEach(x=>x.open=true);d.scrollIntoView({behavior:"smooth"})};
+if(A){draw();setInterval(draw,700);if(location.hash==="#complet")setTimeout(complet,100)}else document.body.insertAdjacentHTML("afterbegin","<p>Aperçu sans l’app.</p>");
 </script>
 </body>
 </html>
