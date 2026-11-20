@@ -177,20 +177,6 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
 
     @Override public void onLog(String s) { h.post(() -> log(s)); }
 
-    /** The watch asks to pair (encryption option): Android shows a request that must be accepted, often only as a notification. */
-    @Override public void pairing(boolean on, String who) {
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm == null) return;
-        if (!on) { nm.cancel(2); return; }
-        nm.createNotificationChannel(new NotificationChannel("assoc", "Association avec la montre", NotificationManager.IMPORTANCE_HIGH));
-        PendingIntent bt = PendingIntent.getActivity(this, 2, new Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS), PendingIntent.FLAG_IMMUTABLE);
-        nm.notify(2, new Notification.Builder(this, "assoc").setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                .setContentTitle("Association demandée par la montre")
-                .setContentText("Accepte la demande d'association Bluetooth (" + who + ") dans les notifications ou les réglages Bluetooth.")
-                .setStyle(new Notification.BigTextStyle().bigText("Accepte la demande d'association Bluetooth de " + who + " : elle apparaît dans les notifications ou dans Réglages → Bluetooth. Sans réponse, elle expire en 20 s environ."))
-                .setContentIntent(bt).setAutoCancel(true).setTimeoutAfter(40000).build());
-    }
-
     @Override public boolean isCentral(String a) { return ble != null && ble.conns.containsKey(a); }
 
     @Override public void onText(String text) {
