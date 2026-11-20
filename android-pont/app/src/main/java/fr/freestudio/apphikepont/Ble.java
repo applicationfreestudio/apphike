@@ -43,7 +43,10 @@ import java.util.UUID;
 @SuppressWarnings("MissingPermission")
 class Ble {
     interface Out { void reply(int rq, Object value, String errName, String errMsg); void event(JSONObject e); }
-    interface Host { boolean btAllowed(); void log(String s); void changed(); }
+    interface Host { boolean btAllowed(); void log(String s); void changed();
+        /** device connected and its services discovered (for the clone server) */ void ready(String id, BluetoothGatt g);
+        /** notification received from a device */ void value(String id, UUID s, UUID c, byte[] v);
+        /** device link lost */ void gone(String id); }
 
     static final UUID CCCD = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     final Context act;
@@ -119,11 +122,26 @@ class Ble {
     /** Stops the scan a little later, so that Android does not refuse frequent restarts (5 per 30 s). */
     void maybeStop() { h.removeCallbacks(stopLater); h.postDelayed(stopLater, 4000); }
 
+    /** Last advertisement content of each device seen (service UUIDs and service data), so that a clone can advertise the same. */
+    final Map<String, JSONObject> advInfo = new HashMap<>();
+
     void onAdv(ScanResult r) {
         BluetoothDevice d = r.getDevice();
         String id = d.getAddress();
         String n = r.getScanRecord() != null && r.getScanRecord().getDeviceName() != null ? r.getScanRecord().getDeviceName() : d.getName();
         if (n != null) names.put(id, n);
+        if (r.getScanRecord() != null) try {
+            JSONObject a = new JSONObject();
+            JSONArray us = new JSONArray();
+            List<ParcelUuid> su = r.getScanRecord().getServiceUuids();
+            if (su != null) for (ParcelUuid u : su) us.put(u.toString());
+            a.put("u", us);
+            JSONObject sd = new JSONObject();
+            Map<ParcelUuid, byte[]> m = r.getScanRecord().getServiceData();
+            if (m != null) for (Map.Entry<ParcelUuid, byte[]> e : m.entrySet()) sd.put(e.getKey().toString(), hex(e.getValue()));
+            a.put("sd", sd);
+            if (us.length() > 0 || sd.length() > 0) advInfo.put(id, a);
+        } catch (Exception ignored) { }
         if (watched.contains(id)) {
             long t = SystemClock.elapsedRealtime();
             Long l = lastAdv.get(id);
@@ -199,7 +217,13 @@ class Ble {
     }
 
     // ------------------------------------------------------------ connections
-    static class Op { int rq; String kind; UUID s, c; byte[] v; boolean flag; Op(int rq, String k) { this.rq = rq; kind = k; } }
+    static class Op { int rq; String kind; UUID s, c; byte[] v; boolean flag; java.util.function.Consumer<byte[]> cb; Op(int rq, String k) { this.rq = rq; kind = k; } }
+
+    /** Answer of an operation: to the page (request number) or to the internal caller (callback, null = failure). */
+    void answer(Op o, Object value, String errName, String errMsg) {
+        if (o.rq >= 0) { out.reply(o.rq, value, errName, errMsg); return; }
+        if (o.cb != null) try { o.cb.accept(errName != null ? null : value instanceof String ? unhex((String) value) : new byte[0]); } catch (Exception ignored) { }
+    }
 
     class Conn {
         final String id;
@@ -208,7 +232,7 @@ class Ble {
         int connRq = -1;
         final ArrayDeque<Op> q = new ArrayDeque<>();
         Op cur;
-        final Runnable opTimeout = () -> { if (cur != null) { Op o = cur; cur = null; out.reply(o.rq, null, "NetworkError", "Pas de réponse de l'appareil (" + o.kind + ")"); pump(); } };
+        final Runnable opTimeout = () -> { if (cur != null) { Op o = cur; cur = null; answer(o, null, "NetworkError", "Pas de réponse de l'appareil (" + o.kind + ")"); pump(); } };
         Conn(String id) { this.id = id; }
 
         void pump() {
@@ -217,13 +241,13 @@ class Ble {
             cur = o;
             BluetoothGattService sv = g.getService(o.s);
             BluetoothGattCharacteristic c = sv == null ? null : sv.getCharacteristic(o.c);
-            if (c == null) { cur = null; out.reply(o.rq, null, "NotFoundError", "Caractéristique introuvable"); pump(); return; }
+            if (c == null) { cur = null; answer(o, null, "NotFoundError", "Caractéristique introuvable"); pump(); return; }
             boolean ok;
             switch (o.kind) {
                 case "notify": {
                     g.setCharacteristicNotification(c, o.flag);
                     BluetoothGattDescriptor d = c.getDescriptor(CCCD);
-                    if (d == null) { cur = null; out.reply(o.rq, true, null, null); pump(); return; }
+                    if (d == null) { cur = null; answer(o, true, null, null); pump(); return; }
                     int p = c.getProperties();
                     byte[] val = !o.flag ? BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
                             : (p & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0 ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.ENABLE_INDICATION_VALUE;
@@ -239,7 +263,7 @@ class Ble {
                 }
                 default: ok = g.readCharacteristic(c);
             }
-            if (!ok) { cur = null; out.reply(o.rq, null, "NetworkError", "Opération refusée par Android (" + o.kind + ")"); h.postDelayed(this::pump, 50); return; }
+            if (!ok) { cur = null; answer(o, null, "NetworkError", "Opération refusée par Android (" + o.kind + ")"); h.postDelayed(this::pump, 50); return; }
             h.postDelayed(opTimeout, 8000);
         }
 
@@ -247,14 +271,14 @@ class Ble {
             if (cur == null || !cur.kind.equals(kind)) return;
             h.removeCallbacks(opTimeout);
             Op o = cur; cur = null;
-            if (st == 0) out.reply(o.rq, value, null, null); else out.reply(o.rq, null, "NetworkError", "Erreur GATT " + st);
+            if (st == 0) answer(o, value, null, null); else answer(o, null, "NetworkError", "Erreur GATT " + st);
             pump();
         }
 
         void failAll(String why) {
             h.removeCallbacks(opTimeout);
-            if (cur != null) { out.reply(cur.rq, null, "NetworkError", why); cur = null; }
-            for (Op o : q) out.reply(o.rq, null, "NetworkError", why);
+            if (cur != null) { answer(cur, null, "NetworkError", why); cur = null; }
+            for (Op o : q) answer(o, null, "NetworkError", why);
             q.clear();
         }
 
@@ -275,6 +299,7 @@ class Ble {
                     int rq = connRq; connRq = -1;
                     host.log("connecté : " + nameOf(id));
                     host.changed();
+                    try { host.ready(id, gatt); } catch (Exception e) { host.log("clonage : " + e.getMessage()); }
                     try {
                         JSONArray a = new JSONArray();
                         for (BluetoothGattService s : gatt.getServices()) {
@@ -305,8 +330,11 @@ class Ble {
 
             void changed(BluetoothGatt gatt, BluetoothGattCharacteristic c, byte[] v) {
                 String hx = hex(v), s = c.getService().getUuid().toString(), u = c.getUuid().toString();
+                UUID su = c.getService().getUuid(), cu = c.getUuid();
+                byte[] copy = v == null ? new byte[0] : v.clone();
                 h.post(() -> {
                     if (gatt != g) return;
+                    try { host.value(id, su, cu, copy); } catch (Exception ignored) { }
                     try { out.event(new JSONObject().put("t", "val").put("id", id).put("s", s).put("c", u).put("h", hx)); } catch (Exception ignored) { }
                 });
             }
@@ -330,7 +358,7 @@ class Ble {
             if (old != null) { try { old.disconnect(); } catch (Exception ignored) { } try { old.close(); } catch (Exception ignored) { } }
             conns.remove(id);
             if (rq >= 0) out.reply(rq, null, "NetworkError", why != null ? why : "Connexion impossible (statut " + st + ")");
-            if (was) { host.log("déconnecté : " + nameOf(id)); try { out.event(new JSONObject().put("t", "disc").put("id", id)); } catch (Exception ignored) { } }
+            if (was) { host.log("déconnecté : " + nameOf(id)); try { out.event(new JSONObject().put("t", "disc").put("id", id)); } catch (Exception ignored) { } try { host.gone(id); } catch (Exception ignored) { } }
             host.changed();
         }
     }
@@ -370,16 +398,32 @@ class Ble {
         c.lost(0, null);
     }
 
+    /** Notifications a clone needs: kept on even if the page unsubscribes. */
+    final Map<String, Set<UUID>> pinned = new HashMap<>();
+
     void op(int rq, String id, String kind, String s, String ch, String hx, boolean flag) {
         Conn c = conns.get(id);
         if (c == null || !c.connected) { out.reply(rq, null, "NetworkError", "GATT Server is disconnected. Cannot perform GATT operations."); return; }
         Op o = new Op(rq, kind);
         try { o.s = UUID.fromString(s); o.c = UUID.fromString(ch); } catch (Exception e) { out.reply(rq, null, "NotFoundError", "UUID invalide"); return; }
+        if ("notify".equals(kind) && !flag) { Set<UUID> pn = pinned.get(id); if (pn != null && pn.contains(o.c)) { out.reply(rq, true, null, null); return; } }
         o.v = unhex(hx);
         o.flag = flag;
         c.q.add(o);
         c.pump();
     }
+
+    /** Operation asked by the clone server (read, or notify on/off); cb gets the value, or null on failure. */
+    void internal(String id, String kind, UUID s, UUID ch, boolean flag, java.util.function.Consumer<byte[]> cb) {
+        Conn c = conns.get(id);
+        if (c == null || !c.connected) { if (cb != null) cb.accept(null); return; }
+        Op o = new Op(-1, kind);
+        o.s = s; o.c = ch; o.flag = flag; o.cb = cb; o.v = new byte[0];
+        c.q.add(o);
+        c.pump();
+    }
+
+    boolean isConnected(String id) { Conn c = conns.get(id); return c != null && c.connected; }
 
     void closeAll() {
         stopScan();

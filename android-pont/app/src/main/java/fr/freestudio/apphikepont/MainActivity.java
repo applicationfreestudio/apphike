@@ -63,9 +63,6 @@ public class MainActivity extends Activity {
                 st.put("pont", new JSONObject().put("on", s != null).put("page", s != null && s.page).put("devices", s != null && s.ble != null ? s.ble.connectedNames() : "").put("error", s != null ? s.error : ""));
                 st.put("watchOn", wp.getBoolean("on", false));
                 st.put("watch", s != null && s.watch != null ? s.watch.state() : new JSONObject().put("on", false));
-                JSONObject o = WatchServer.defaults(), saved = PontService.loadOptions(MainActivity.this);
-                for (java.util.Iterator<String> it = saved.keys(); it.hasNext(); ) { String k = it.next(); o.put(k, saved.get(k)); }
-                st.put("opts", o);
                 StringBuilder b = new StringBuilder();
                 synchronized (PontService.LOG) { for (String l : PontService.LOG) b.append(l).append('\n'); }
                 st.put("log", b.toString());
@@ -83,16 +80,9 @@ public class MainActivity extends Activity {
                 else if (s != null && s.watch != null) s.watch.stop();
             });
         }
-        @JavascriptInterface public void setOpts(String json) {
-            h.post(() -> {
-                try {
-                    JSONObject o = new JSONObject(json);
-                    wp.edit().putString("opts", o.toString()).apply();
-                    PontService s = PontService.instance;
-                    if (s != null && s.watch != null) s.watch.setOptions(o);
-                } catch (Exception ignored) { }
-            });
-        }
+        @JavascriptInterface public void cloneAdd(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.watch != null) s.watch.add(id); }); }
+        @JavascriptInterface public void cloneDel(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.watch != null) s.watch.del(id); }); }
+        @JavascriptInterface public void cloneForget(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.watch != null) s.watch.forget(id); }); }
         @JavascriptInterface public void copy(String text) {
             h.post(() -> {
                 ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("journal", text));

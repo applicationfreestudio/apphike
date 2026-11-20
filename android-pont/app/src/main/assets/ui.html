@@ -28,7 +28,9 @@ button.stop{background:var(--st)}
 .tog[aria-pressed="true"] .sw{background:var(--a)}.tog[aria-pressed="true"] .sw::after{transform:translateX(20px)}
 .tog.ok{border-color:var(--ok)}
 #sbt{transition:color .2s}#sbt.on{color:var(--ok)}
-#ltog{margin:0 0 8px}.tog.wa{border-color:var(--wa)}
+#ltog{margin:0 0 8px}
+.h3{font-weight:700;font-size:.95rem;margin:14px 0 4px}
+.dl{display:flex;flex-direction:column;gap:6px}.dl .it{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg)}.dl .it>div{flex:1;min-width:0}.dl .it b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dl .it small{display:block;color:var(--mu);font-size:.8rem}.dl .it button{flex:none;width:auto;margin:0;padding:7px 12px;font-size:.88rem}.dl .it button.del{background:none;border:1px solid var(--st);color:var(--st)}.dl .it button.fg{background:none;border:0;color:var(--mu);padding:7px 4px;font-size:1.1rem}.dl .em{color:var(--mu);font-size:.88rem;padding:4px 2px}.tog.wa{border-color:var(--wa)}
 .st{display:flex;align-items:center;gap:8px;font-weight:600;margin-top:8px}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--mu);flex:none}.dot.ok{background:var(--ok)}.dot.wa{background:var(--wa)}.dot.ko{background:var(--st)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:.9rem;margin-top:8px}.kv span{color:var(--mu)}.kv b{font-variant-numeric:tabular-nums;word-break:break-word}
@@ -73,63 +75,14 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 
 <details class="card" id="srv">
 <summary class="h2i srvs"><svg id="sbt" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7.5 17 17l-5 5V2l5 5L6.5 16.5"/></svg><span style="flex:1">Serveur Bluetooth de données</span></summary>
-<button type="button" class="tog" id="wtog" aria-pressed="false"><span>Activer le serveur</span><span class="sw"></span></button>
+<button type="button" class="tog" id="wtog" aria-pressed="false"><span>Diffuser les appareils clonés</span><span class="sw"></span></button>
 <div class="st"><span class="dot" id="wdot"></span><span id="wtxt">—</span></div>
 <div class="kv" id="wkv"></div>
-<div class="tip">Le téléphone se présente comme un tapis (FTMS : vitesse et inclinaison) et comme un capteur cardio (fréquence de la ceinture connectée par App Hike). Sur la Suunto, l’extension Treadmill Link lit le tapis ; le cardio s’associe dans Réglages → Connectivité → Associer un capteur. Chaque échange est noté dans le journal.</div>
-
-<details><summary>Valeurs envoyées</summary>
-<label class="ck"><input type="radio" name="src" data-k="src" value="tapis"><span>Valeurs réelles<small>vitesse et inclinaison du tapis, fréquence de la ceinture (connectés par App Hike)</small></span></label>
-<label class="ck"><input type="radio" name="src" data-k="src" value="test"><span>Valeurs de test<small>pour essayer sans faire tourner le tapis</small></span></label>
-<div class="fl"><span>Vitesse de test</span><span class="stp"><button type="button" data-step="tSp" data-d="-0.5">−</button><b id="tSpv"></b><button type="button" data-step="tSp" data-d="0.5">+</button></span></div>
-<div class="fl"><span>Cardio de test</span><span class="stp"><button type="button" data-step="tHr" data-d="-5">−</button><b id="tHrv"></b><button type="button" data-step="tHr" data-d="5">+</button></span></div>
-<div class="fl"><span>Inclinaison de test</span><span class="stp"><button type="button" data-step="tInc" data-d="-1">−</button><b id="tIncv"></b><button type="button" data-step="tInc" data-d="1">+</button></span></div>
-</details>
-
-<details><summary>Profils annoncés et envoyés</summary>
-<label class="ck"><input type="checkbox" data-k="rsc"><span>Capteur de foulée (RSC, 0x1814)<small>accepté par la plupart des montres : vitesse, cadence, distance</small></span></label>
-<label class="ck"><input type="checkbox" data-k="csc"><span>Capteur de vitesse vélo (CSC, 0x1816)<small>vitesse calculée à partir de tours de roue</small></span></label>
-<label class="ck"><input type="checkbox" data-k="hr"><span>Capteur cardio (HRS, 0x180D)<small>fréquence de la ceinture (ou de test) : accepté par toutes les montres, utile pour vérifier que la montre voit le téléphone</small></span></label>
-<label class="ck"><input type="checkbox" data-k="ftms"><span>Tapis de course (FTMS, 0x1826)<small>vitesse et inclinaison, si la montre gère les tapis</small></span></label>
-<p>Le capteur garde toujours la même structure (tous les services, plus infos appareil et batterie) : seuls les profils cochés sont annoncés et reçoivent des valeurs. Ainsi la montre retrouve le capteur qu’elle a mémorisé.</p>
-</details>
-
-<details><summary>Annonce Bluetooth</summary>
-<div class="fl" style="display:block"><span>Nom annoncé<small>vide : nom Bluetooth du téléphone ; sinon le nom du téléphone est changé pendant l’émission puis rétabli</small></span><input type="text" data-k="name" placeholder="ex. AppHike Pod" style="margin-top:6px"></div>
-<div class="fl"><span>Profil annoncé en premier<small>les autres profils cochés suivent</small></span><select data-k="advFirst"><option value="tapis">tapis (FTMS)</option><option value="cardio">cardio</option><option value="foulee">foulée</option><option value="velo">vélo</option></select></div>
-<label class="ck"><input type="checkbox" data-k="nameMain"><span>Nom dans l’annonce principale<small>sinon dans la réponse au scan</small></span></label>
-<label class="ck"><input type="checkbox" data-k="advAll"><span>Annoncer tous les profils<small>décoché : seulement le profil annoncé en premier</small></span></label>
-<label class="ck"><input type="checkbox" data-k="advFast"><span>Annonce rapide<small>visible plus vite, consomme un peu plus</small></span></label>
-<label class="ck"><input type="checkbox" data-k="txHigh"><span>Puissance d’émission élevée</span></label>
-</details>
-
-<details><summary>Capteur cardio (HRS)</summary>
-<label class="ck"><input type="checkbox" data-k="hrContact"><span>Contact du capteur détecté<small>certaines montres ignorent une fréquence envoyée sans l’indication de contact avec la peau</small></span></label>
-</details>
-
-<details><summary>Capteur de foulée (RSC)</summary>
-<div class="fl"><span>Cadence envoyée</span><select data-k="cadMode"><option value="estimee">estimée d’après la vitesse</option><option value="fixe">valeur fixe</option><option value="zero">0</option></select></div>
-<div class="fl"><span>Cadence fixe (pas/min)</span><input type="number" data-k="cadFix" min="0" max="250"></div>
-<label class="ck"><input type="checkbox" data-k="cadHalf"><span>Cadence en foulées (÷ 2)<small>certaines montres comptent un seul pied</small></span></label>
-<label class="ck"><input type="checkbox" data-k="stride"><span>Longueur de foulée</span></label>
-<label class="ck"><input type="checkbox" data-k="dist"><span>Distance totale</span></label>
-<div class="fl"><span>Course ou marche</span><select data-k="running"><option value="auto">auto (course dès 7,5 km/h)</option><option value="non">toujours marche</option><option value="oui">toujours course</option></select></div>
-<div class="fl"><span>Position du capteur</span><select data-k="loc"><option value="0">autre</option><option value="1">dessus de la chaussure</option><option value="2">dans la chaussure</option><option value="3">hanche</option><option value="5">talon</option></select></div>
-</details>
-
-<details><summary>Tapis (FTMS)</summary>
-<div class="fl"><span>Données envoyées</span><select data-k="ftFields"><option value="vitesse">vitesse</option><option value="vitesse+inclinaison">vitesse + inclinaison</option><option value="vitesse+inclinaison+distance">+ distance</option><option value="complet">+ distance, D+, temps</option></select></div>
-
-</details>
-
-<details><summary>Vélo (CSC)</summary>
-<div class="fl"><span>Circonférence de roue (mm)<small>à reporter dans la montre</small></span><input type="number" data-k="wheel" min="500" max="3000"></div>
-</details>
-
-<details><summary>Sécurité et rythme</summary>
-<label class="ck"><input type="checkbox" data-k="secure"><span>Exiger le chiffrement (appairage)<small>la montre s’appaire au téléphone et peut ensuite le retrouver même si son adresse Bluetooth change ; refais l’association après l’avoir coché</small></span></label>
-<div class="fl"><span>Envoi des données</span><select data-k="period"><option value="250">4 fois par seconde</option><option value="500">2 fois par seconde</option><option value="1000">1 fois par seconde</option><option value="2000">toutes les 2 s</option></select></div>
-</details>
+<div class="h3">Appareils clonés</div>
+<div id="cll" class="dl"></div>
+<div class="h3">Ajouter un clonage</div>
+<div id="cla" class="dl"></div>
+<div class="tip">Le clone reprend tel quel l’appareil choisi (mêmes services, mêmes données, octet pour octet) : la montre le voit comme l’appareil d’origine. Données seulement : ce que la montre écrit n’est pas transmis. Un appareil apparaît ici dès qu’App Hike l’a connecté une fois ; son clone démarre quand il est connecté.</div>
 </details>
 
 <section class="card">
@@ -143,28 +96,32 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 const $=id=>document.getElementById(id),A=window.AHC;let S={},O=null,logTxt="";
 const f1=x=>(+x).toFixed(1).replace(".",",");
 const kv=(el,rows)=>{el.innerHTML="";for(const [k,v] of rows){const a=document.createElement("span");a.textContent=k;const b=document.createElement("b");b.textContent=v;el.append(a,b)}};
-function save(){A.setOpts(JSON.stringify(O))}
-function fill(){document.querySelectorAll("[data-k]").forEach(e=>{const k=e.dataset.k,v=O[k];if(e.type==="checkbox")e.checked=!!v;else if(e.type==="radio")e.checked=String(v)===e.value;else if(document.activeElement!==e)e.value=v==null?"":v});$("tSpv").textContent=f1(O.tSp)+" km/h";$("tIncv").textContent=Math.round(O.tInc)+" %";$("tHrv").textContent=Math.round(O.tHr||120)+" bpm"}
-document.addEventListener("change",e=>{const el=e.target,k=el.dataset&&el.dataset.k;if(!k||!O)return;let v=el.type==="checkbox"?el.checked:el.value;if(el.type==="number"||k==="loc"||k==="period")v=+v;if(el.type==="radio"&&!el.checked)return;O[k]=v;save()});
-document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{const k=b.dataset.step;let v=(+O[k])+(+b.dataset.d);v=k==="tSp"?Math.max(0,Math.min(20,v)):k==="tHr"?Math.max(40,Math.min(220,v)):Math.max(-5,Math.min(40,v));O[k]=Math.round(v*10)/10;fill();save()});
+const esc=t=>String(t==null?"":t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ago=t=>{if(!t)return"";const m=Math.round((Date.now()-t)/60000);return m<1?"à l’instant":m<60?"il y a "+m+" min":m<1440?"il y a "+Math.round(m/60)+" h":"il y a "+Math.round(m/1440)+" j"};
+let LK="";
+function lists(W){const cs=W.clones||[],hs=W.hist||[],k=JSON.stringify([cs,hs.map(x=>[x.id,x.con,x.cloned])]);if(k===LK)return;LK=k;
+let a="";for(const c of cs)a+='<div class="it"><div><b>'+esc(c.name)+'</b><small>'+(!c.known?"structure inconnue : à connecter une fois par App Hike":(c.src?"source connectée":"source absente, en attente")+(c.adv==="ok"?" · annoncé":c.adv?" · annonce : "+esc(c.adv):""))+'</small></div><button type="button" class="del" data-del="'+esc(c.id)+'">Supprimer</button></div>';
+$("cll").innerHTML=a||'<div class="em">Aucun clone pour l’instant.</div>';
+const av=hs.filter(x=>!x.cloned).sort((x,y)=>(y.con-x.con)||(y.t-x.t));let b="";
+for(const x of av)b+='<div class="it"><div><b>'+esc(x.name)+'</b><small>'+(x.con?"connecté maintenant":"vu "+ago(x.t))+(x.kinds?" · "+esc(x.kinds):"")+'</small></div><button type="button" data-add="'+esc(x.id)+'">Cloner</button><button type="button" class="fg" data-fg="'+esc(x.id)+'" aria-label="Retirer de l’historique">×</button></div>';
+$("cla").innerHTML=b||'<div class="em">Connecte un appareil depuis App Hike pour pouvoir le cloner.</div>'}
+document.addEventListener("click",e=>{const t=e.target.closest("[data-add],[data-del],[data-fg]");if(!t)return;if(t.dataset.add)A.cloneAdd(t.dataset.add);else if(t.dataset.del)A.cloneDel(t.dataset.del);else A.cloneForget(t.dataset.fg);LK="";setTimeout(draw,150)});
 $("prun").onclick=()=>A.pont(!(S.pont&&S.pont.on));
 $("wtog").onclick=()=>A.watch(!S.watchOn);
 $("lcp").onclick=()=>A.copy(logTxt);$("ltog").onclick=()=>{A.logOn(S.logOn===false);setTimeout(()=>{try{S=JSON.parse(A.state());$("ltog").setAttribute("aria-pressed",S.logOn!==false)}catch(e){}},50)};$("lcl").onclick=()=>{A.clearLog();$("log").textContent=""};
 function draw(){
 try{S=JSON.parse(A.state())}catch(e){return}
 $("ver").textContent="version "+(S.version||"?");
-if(!O){O=S.opts||{};fill()}
 const P=S.pont||{};$("pdot").className="dot "+(!P.on?"":P.page?"ok":"wa");
 $("ptxt").textContent=!S.perm?"Autorisation « Appareils à proximité » à accorder":!P.on?"Arrêtée":P.page?"App Hike connectée":"Active, en attente d’App Hike";
 kv($("pkv"),P.on?[["Appareils connectés",P.devices||"aucun"]].concat(P.error?[["Problème",P.error]]:[]):[]);
 $("prun").textContent=!S.perm?"Accorder les autorisations":P.on?"Arrêter App Hike Connexion":"Démarrer App Hike Connexion";if(!S.perm)$("prun").onclick=()=>A.perms();else $("prun").onclick=()=>A.pont(!P.on);
-const W=S.watch||{},on=!!S.watchOn;$("wtog").setAttribute("aria-pressed",on);
+const W=S.watch||{},on=!!S.watchOn;$("wtog").setAttribute("aria-pressed",on);lists(W);
 const cl=W.clients||[],sub=cl.some(c=>c.subs);$("wtog").className="tog"+(on&&W.adv?(sub?" ok":" wa"):"");
 const wd="dot "+(!on?"":W.error?"ko":!W.adv?"wa":sub?"ok":"wa");
-$("wdot").className=wd;$("sbt").classList.toggle("on",on&&!!P.on&&!!W.adv&&!W.error);$("ltog").setAttribute("aria-pressed",S.logOn!==false);$("wtxt").textContent=!on?"Serveur désactivé":!P.on?"Démarre App Hike Connexion":W.error?"Problème : "+W.error:!W.adv?"Démarrage du serveur…":sub?"Montre abonnée : données envoyées":cl.length?"Liaison ouverte, aucun abonnement au capteur":"Serveur actif, en attente d’un appareil";
+$("wdot").className=wd;$("sbt").classList.toggle("on",on&&!!P.on&&!!W.adv&&!W.error);$("ltog").setAttribute("aria-pressed",S.logOn!==false);$("wtxt").textContent=!on?"Diffusion désactivée":!P.on?"Démarre App Hike Connexion":W.error?"Problème : "+W.error:!W.adv?"Démarrage de la diffusion…":sub?"Montre abonnée : données transmises":cl.length?"Montre connectée, pas encore abonnée":"Clones annoncés, en attente de la montre";
 const rows=[];if(on&&W.adv)rows.push(["Nom annoncé",W.name||"—"]);
-for(const c of cl)rows.push([c.subs?"Abonné":"Liaison",c.name+(c.subs?" · "+c.subs:"")]);
-if(on)rows.push(["Valeurs",(W.live?f1(W.sp)+" km/h · "+f1(W.inc)+" % · cadence "+W.cad:(O&&O.src==="test"?"—":"pas de mesure du tapis"))+(O&&O.hr?" · cardio "+(W.hr||"—"):"")]);
+for(const c of cl)rows.push([c.subs?"Abonnée":"Liaison",c.name+(c.subs?" · "+c.subs:"")]);
 if(on)rows.push(["Envois",String(W.sent||0)]);
 kv($("wkv"),rows);
 if(S.log!==logTxt){const box=$("log"),bottom=box.scrollTop+box.clientHeight>=box.scrollHeight-20;logTxt=S.log||"";box.textContent=logTxt||"(vide)";if(bottom)box.scrollTop=box.scrollHeight}}

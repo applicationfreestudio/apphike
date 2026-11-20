@@ -28,7 +28,7 @@ import java.util.Locale;
  * and the local channel (WebSocket 127.0.0.1:47826) used by the App Hike page in Chrome.
  * If the page goes away for more than 10 s, the devices are released.
  */
-public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.Handler, WatchServer.Host {
+public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.Handler, CloneServer.Host {
     static final String STOP = "fr.freestudio.apphikepont.STOP";
     static PontService instance;
     static final List<String> LOG = new ArrayList<>();
@@ -37,7 +37,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
     final Handler h = new Handler(Looper.getMainLooper());
     Ble ble;
     WsServer ws;
-    WatchServer watch;
+    CloneServer watch;
     String error = "";
     boolean page;
     final Runnable releaseAll = () -> { if (!page) { log("page absente depuis 10 s : appareils libérés"); ble.closeAll(); ble.watched.clear(); ble.filters = null; changed(); } };
@@ -79,7 +79,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         return (error.isEmpty() ? "" : error + " · ")
                 + (page ? "App Hike connectée" : "En attente d'App Hike")
                 + (d.isEmpty() ? "" : " · " + d)
-                + (watch != null && watch.on ? " · serveur : " + (watch.clients.isEmpty() ? "en attente" : "connectée") : "");
+                + (watch != null && watch.on ? " · clonage : " + (watch.clients.isEmpty() ? "en attente" : "montre connectée") : "");
     }
 
     Notification notif() {
@@ -111,8 +111,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
             try { ws.start(); }
             catch (Exception e) { h.post(() -> { error = "canal local indisponible (" + e.getMessage() + ")"; log("✗ " + error); changed(); }); }
         }, "ws-start").start();
-        watch = new WatchServer(this, this);
-        watch.setOptions(loadOptions(this));
+        watch = new CloneServer(this, this, ble);
         if (getSharedPreferences("watch", MODE_PRIVATE).getBoolean("on", false)) watch.start();
         log("App Hike Connexion démarrée");
     }
@@ -145,32 +144,13 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
     }
 
     @Override public void event(JSONObject e) {
-        if (watch != null && "val".equals(e.optString("t")) && e.optString("c").startsWith("00002acd")) parseTreadmill(e.optString("h"));
-        if (watch != null && "val".equals(e.optString("t")) && e.optString("c").startsWith("00002a37")) {
-            byte[] v = Ble.unhex(e.optString("h"));
-            if (v.length >= 2) watch.heartRate((v[0] & 1) != 0 && v.length >= 3 ? ((v[1] & 0xff) | ((v[2] & 0xff) << 8)) : (v[1] & 0xff));
-        }
         if (ws != null) ws.send(e.toString());
     }
 
-    /** FTMS Treadmill Data from the real treadmill: speed and incline, for the watch server. */
-    void parseTreadmill(String hx) {
-        byte[] v = Ble.unhex(hx);
-        if (v.length < 2) return;
-        int f = (v[0] & 0xff) | ((v[1] & 0xff) << 8), i = 2;
-        Double sp = null, inc = null;
-        try {
-            if ((f & 1) == 0) { sp = ((v[i] & 0xff) | ((v[i + 1] & 0xff) << 8)) / 100.0; i += 2; }
-            if ((f & 2) != 0) i += 2;
-            if ((f & 4) != 0) i += 3;
-            if ((f & 8) != 0 && v.length >= i + 2) inc = ((short) ((v[i] & 0xff) | ((v[i + 1] & 0xff) << 8))) / 10.0;
-        } catch (Exception ignored) { return; }
-        watch.treadmill(sp, inc);
-    }
-
-    static org.json.JSONObject loadOptions(android.content.Context c) {
-        try { return new JSONObject(c.getSharedPreferences("watch", MODE_PRIVATE).getString("opts", "{}")); } catch (Exception e) { return new JSONObject(); }
-    }
+    // ------------------------------------------------------------ devices -> clone server
+    @Override public void ready(String id, android.bluetooth.BluetoothGatt g) { if (watch != null) watch.ready(id, g); }
+    @Override public void value(String id, java.util.UUID s, java.util.UUID c, byte[] v) { if (watch != null) watch.value(id, s, c, v); }
+    @Override public void gone(String id) { if (watch != null) watch.gone(id); }
 
     // ------------------------------------------------------------ page -> channel (reader thread: posted to the main thread)
     @Override public void onOpen(String origin) {
