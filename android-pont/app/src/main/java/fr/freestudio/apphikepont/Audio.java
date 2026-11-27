@@ -209,9 +209,9 @@ class Audio {
             o.put("n", c.size()).put("savedCon", cc != null).put("savedName", cc != null ? name(cc) : "");
             BluetoothDevice pd = dev(pending);
             o.put("trying", pd != null ? name(pd) : "");
-            String cur = "";
-            if (a2dp != null) { List<BluetoothDevice> l = a2dp.getConnectedDevices(); if (!l.isEmpty()) cur = name(l.get(0)); }
-            o.put("current", cur);
+            String cur = "", cid = "";
+            if (a2dp != null) { List<BluetoothDevice> l = a2dp.getConnectedDevices(); if (!l.isEmpty()) { cur = name(l.get(0)); cid = l.get(0).getAddress(); } }
+            o.put("current", cur).put("curId", cid);
             JSONArray a = new JSONArray();
             if (ad != null) {
                 List<BluetoothDevice> bs = new java.util.ArrayList<>();

@@ -63,7 +63,12 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
+    /** Audio state to App Hike (settings: speaker switch and list). */
+    final Runnable pushAudio = () -> { try { if (page && audio != null) event(new JSONObject().put("t", "audio").put("s", audio.state())); } catch (Exception ignored) { } };
+
     @Override public void changed() {
+        h.removeCallbacks(pushAudio);
+        h.postDelayed(pushAudio, 400);
         h.removeCallbacks(updateNotif);
         h.postDelayed(updateNotif, 300);
         Runnable r = onChange;
@@ -200,6 +205,9 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
                     case "disconnect": ble.disconnect(a.optString(0)); break;
                     case "op": ble.op(rq, a.optString(0), a.optString(1), a.optString(2), a.optString(3), a.optString(4), a.optBoolean(5)); break;
                     case "ping": event(new JSONObject().put("t", "pong")); break;
+                    case "audio": pushAudio.run(); break;
+                    case "audioCon": if (audio != null) audio.connectNow(a.optString(0)); break;
+                    case "audioDis": if (audio != null) audio.disconnectNow(a.optString(0)); break;
                     default: if (rq >= 0) reply(rq, null, "NotSupportedError", "fonction inconnue : " + f);
                 }
             } catch (Exception e) { log("message illisible : " + e.getMessage()); }
