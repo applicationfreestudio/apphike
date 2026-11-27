@@ -61,6 +61,30 @@ class Audio {
     String pending = ""; int tried = 0;
     final java.util.Set<String> skip = new java.util.HashSet<>();
 
+    void start() {
+        if (ad == null || on) return;
+        on = true;
+        IntentFilter f = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        f.addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
+        ctx.registerReceiver(rx, f);
+        try {
+            ad.getProfileProxy(ctx, new BluetoothProfile.ServiceListener() {
+                @Override public void onServiceConnected(int p, BluetoothProfile pr) { a2dp = (BluetoothA2dp) pr; tryConnect(true); lst.changed(); }
+                @Override public void onServiceDisconnected(int p) { a2dp = null; lst.changed(); }
+            }, BluetoothProfile.A2DP);
+        } catch (Exception e) { error = "audio Bluetooth indisponible"; }
+        h.postDelayed(loop, 30000);
+    }
+
+    void stop() {
+        if (!on) return;
+        on = false;
+        h.removeCallbacksAndMessages(null);
+        try { ctx.unregisterReceiver(rx); } catch (Exception ignored) { }
+        try { if (a2dp != null) ad.closeProfileProxy(BluetoothProfile.A2DP, a2dp); } catch (Exception ignored) { }
+        a2dp = null;
+    }
+
     /** Chosen speakers, in priority order. */
     List<String> chosen() {
         List<String> l = new java.util.ArrayList<>();
