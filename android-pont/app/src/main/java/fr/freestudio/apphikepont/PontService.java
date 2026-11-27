@@ -38,6 +38,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
     Ble ble;
     WsServer ws;
     CloneServer watch;
+    Audio audio;
     String error = "";
     boolean page;
     final Runnable releaseAll = () -> { if (!page) { log("page absente depuis 10 s : appareils libérés"); ble.closeAll(); ble.watched.clear(); ble.filters = null; changed(); } };
@@ -79,6 +80,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         return (error.isEmpty() ? "" : error + " · ")
                 + (page ? "App Hike connectée" : "En attente d'App Hike")
                 + (d.isEmpty() ? "" : " · " + d)
+                + (audio == null || audio.statusText().isEmpty() ? "" : " · " + audio.statusText())
                 + (watch != null && watch.on ? " · clonage : " + (watch.clients.isEmpty() ? "en attente" : "montre connectée") : "");
     }
 
@@ -113,6 +115,8 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         }, "ws-start").start();
         watch = new CloneServer(this, this, ble);
         if (getSharedPreferences("watch", MODE_PRIVATE).getBoolean("on", false)) watch.start();
+        audio = new Audio(this, this);
+        try { audio.start(); } catch (Exception e) { log("✗ audio : " + e.getMessage()); }
         log("App Hike Connexion démarrée");
     }
 
@@ -126,6 +130,7 @@ public class PontService extends Service implements Ble.Out, Ble.Host, WsServer.
         h.removeCallbacksAndMessages(null);
         if (ws != null) ws.stop();
         if (watch != null) watch.stop();
+        if (audio != null) audio.stop();
         if (ble != null) ble.closeAll();
         log("App Hike Connexion arrêtée");
         super.onDestroy();

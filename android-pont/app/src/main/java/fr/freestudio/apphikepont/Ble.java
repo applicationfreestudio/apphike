@@ -447,6 +447,19 @@ class Ble {
         return b.toString();
     }
 
+    /** Connected treadmill (FTMS 0x1826) and heart-rate belt (0x180D), by their services. */
+    JSONObject kinds() {
+        JSONObject o = new JSONObject();
+        try {
+            for (Conn c : conns.values()) {
+                if (!c.connected || c.g == null) continue;
+                if (c.g.getService(java.util.UUID.fromString("00001826-0000-1000-8000-00805f9b34fb")) != null) o.put("tm", nameOf(c.id));
+                else if (c.g.getService(java.util.UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")) != null) o.put("hr", nameOf(c.id));
+            }
+        } catch (Exception ignored) { }
+        return o;
+    }
+
     String describe() {
         return String.format(Locale.FRANCE, "%d connexion(s), scan %s", conns.size(), scanning ? "actif" : "arrêté");
     }

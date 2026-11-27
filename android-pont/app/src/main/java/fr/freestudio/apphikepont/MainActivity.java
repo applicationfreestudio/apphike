@@ -61,6 +61,8 @@ public class MainActivity extends Activity {
                 try { v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { v = "?"; }
                 st.put("version", v);
                 st.put("pont", new JSONObject().put("on", s != null).put("page", s != null && s.page).put("devices", s != null && s.ble != null ? s.ble.connectedNames() : "").put("error", s != null ? s.error : ""));
+                st.put("kinds", s != null && s.ble != null ? s.ble.kinds() : new JSONObject());
+                st.put("audio", s != null && s.audio != null ? s.audio.state() : new JSONObject().put("on", false));
                 st.put("watchOn", wp.getBoolean("on", false));
                 st.put("watch", s != null && s.watch != null ? s.watch.state() : new JSONObject().put("on", false));
                 StringBuilder b = new StringBuilder();
@@ -94,6 +96,11 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void logOn(boolean on) { PontService.LOG_ON = on; getSharedPreferences("journal", MODE_PRIVATE).edit().putBoolean("on", on).apply(); }
         @JavascriptInterface public void clearLog() { synchronized (PontService.LOG) { PontService.LOG.clear(); } }
+        @JavascriptInterface public void audioPick(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.choose(id); }); }
+        @JavascriptInterface public void audioForget() { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.forget(); }); }
+        @JavascriptInterface public void audioAuto(boolean on) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.setAuto(on); }); }
+        @JavascriptInterface public void audioRetry() { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.tryConnect(true); }); }
+        @JavascriptInterface public void btSettings() { h.post(() -> { try { startActivity(new Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)); } catch (Exception ignored) { } }); }
         @JavascriptInterface public void perms() { h.post(MainActivity.this::start); }
     }
 
