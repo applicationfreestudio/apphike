@@ -96,8 +96,9 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void logOn(boolean on) { PontService.LOG_ON = on; getSharedPreferences("journal", MODE_PRIVATE).edit().putBoolean("on", on).apply(); }
         @JavascriptInterface public void clearLog() { synchronized (PontService.LOG) { PontService.LOG.clear(); } }
-        @JavascriptInterface public void audioPick(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.choose(id); }); }
-        @JavascriptInterface public void audioForget() { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.forget(); }); }
+        @JavascriptInterface public void audioToggle(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.toggle(id); }); }
+        @JavascriptInterface public void audioConnect(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.connectNow(id); }); }
+        @JavascriptInterface public void audioDisconnect(String id) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.disconnectNow(id); }); }
         @JavascriptInterface public void audioAuto(boolean on) { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.setAuto(on); }); }
         @JavascriptInterface public void audioRetry() { h.post(() -> { PontService s = PontService.instance; if (s != null && s.audio != null) s.audio.tryConnect(true); }); }
         @JavascriptInterface public void btSettings() { h.post(() -> { try { startActivity(new Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)); } catch (Exception ignored) { } }); }

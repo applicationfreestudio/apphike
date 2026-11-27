@@ -46,6 +46,10 @@ select,input[type=text],input[type=number]{font:inherit;color:var(--tx);backgrou
 input[type=number]{width:90px;text-align:center}input[type=text]{width:100%}
 .stp{display:flex;align-items:center;gap:6px}.stp button{width:40px;margin:0;padding:6px 0;background:var(--b)}.stp b{min-width:56px;text-align:center;font-variant-numeric:tabular-nums}
 .dv{display:flex;flex-direction:column;gap:6px;margin-top:10px}.dv .it{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg)}.dv .it svg{flex:none;color:var(--mu)}.dv .it.on svg{color:var(--ok)}.dv .it>div{flex:1;min-width:0}.dv .it b{display:block;font-size:.92rem}.dv .it small{display:block;color:var(--mu);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#aul .it{gap:8px}#aul .rk{flex:none;width:22px;height:22px;border-radius:50%;background:var(--a);color:#fff;font-size:.78rem;font-weight:700;display:flex;align-items:center;justify-content:center}#aul .rk.no{background:none;border:1.5px solid var(--ln);color:var(--mu)}
+#aul button.dc{background:none;border:1px solid var(--st);color:var(--st);padding:6px 9px;font-size:.82rem}#aul button.cn{background:none;border:1px solid var(--a);color:var(--a);padding:6px 9px;font-size:.82rem}
+#aul .ck{flex:none;position:relative;width:42px;height:24px;border-radius:12px;background:var(--ln);border:0;padding:0;margin:0}#aul .ck::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}#aul .ck[aria-pressed="true"]{background:var(--a)}#aul .ck[aria-pressed="true"]::after{transform:translateX(18px)}
+#abi.on{color:var(--ok)}
 .tip{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--ln);font-size:.85rem}
 #splash{display:none}
 body.splash>*:not(#splash){display:none!important}
@@ -74,15 +78,15 @@ pre{margin:10px 0 0;max-height:46vh;overflow:auto;background:var(--bg);border:1p
 <button type="button" id="prun" class="sec"></button>
 </section>
 
-<section class="card" id="auc">
-<div class="h2i"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><circle cx="12" cy="7" r="1.2"/></svg>Connexion audio</div>
+<details class="card" id="auc">
+<summary class="h2i srvs"><svg id="abi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><circle cx="12" cy="7" r="1.2"/></svg><span style="flex:1">Connexion audio</span></summary>
 <div class="st"><span class="dot" id="adot"></span><span id="atxt">—</span></div>
-<button type="button" class="tog" id="atog" aria-pressed="true"><span>Reconnexion automatique de l’enceinte</span><span class="sw"></span></button>
+<button type="button" class="tog" id="atog" aria-pressed="true"><span>Connexion automatique des enceintes</span><span class="sw"></span></button>
 <div class="h3">Enceintes appairées</div>
 <div id="aul" class="dl"></div>
 <div class="row"><button type="button" class="sec" id="abt">Réglages Bluetooth</button><button type="button" class="sec" id="art">Reconnecter</button></div>
-<div class="tip">Choisis l’enceinte une fois : tant qu’App Hike Connexion tourne, elle est reconnectée dès qu’elle est allumée et appairée. Une nouvelle enceinte s’appaire d’abord dans les réglages Bluetooth du téléphone.</div>
-</section>
+<div class="tip">Active les enceintes à connecter automatiquement : dès que l’une d’elles est allumée, elle se connecte, dans l’ordre de la liste (1 avant 2…). Si tu déconnectes une enceinte, la suivante allumée prend le relais ; celle déconnectée ne revient pas toute seule tant que tu ne la reconnectes pas. Une nouvelle enceinte s’appaire d’abord dans les réglages Bluetooth du téléphone.</div>
+</details>
 
 <details class="card" id="srv">
 <summary class="h2i srvs"><svg id="sbt" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7.5 17 17l-5 5V2l5 5L6.5 16.5"/></svg><span style="flex:1">Serveur Bluetooth de données</span></summary>
@@ -110,14 +114,14 @@ const kv=(el,rows)=>{el.innerHTML="";for(const [k,v] of rows){const a=document.c
 const esc=t=>String(t==null?"":t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ago=t=>{if(!t)return"";const m=Math.round((Date.now()-t)/60000);return m<1?"à l’instant":m<60?"il y a "+m+" min":m<1440?"il y a "+Math.round(m/60)+" h":"il y a "+Math.round(m/1440)+" j"};
 let LK="",DK="",AK="";
-function auDraw(AU,P){const on=!!P.on;$("atog").setAttribute("aria-pressed",AU.auto!==false);
-$("adot").className="dot "+(!on?"":AU.savedCon?"ok":AU.error?"ko":AU.saved?"wa":"");
-$("atxt").textContent=!on?"Démarre App Hike Connexion":AU.bt===false?"Bluetooth désactivé":AU.savedCon?"Enceinte connectée : "+AU.savedName:AU.error?AU.error:AU.saved?(AU.savedBonded?(AU.auto!==false?"Enceinte "+AU.savedName+" : reconnexion automatique dès qu’elle est allumée":"Enceinte "+AU.savedName+" non connectée"):"Enceinte "+(AU.savedName||"")+" plus appairée : appaire-la à nouveau"):"Choisis ton enceinte ci-dessous";
-$("art").hidden=!on||!AU.saved||!!AU.savedCon;
-const l=AU.list||[],k=JSON.stringify([l,AU.saved]);if(k===AK)return;AK=k;let a="";
-for(const d of l){const me=d.id===AU.saved;a+='<div class="it"><div><b>'+esc(d.name)+'</b><small>'+(d.con?"connectée":"appairée")+(me?" · enceinte choisie":"")+'</small></div>'+(me?'<button type="button" class="del" data-afg="1">Oublier</button>':'<button type="button" data-apk="'+esc(d.id)+'">Choisir</button>')+'</div>'}
+function auDraw(AU,P){const on=!!P.on,l=AU.list||[];$("atog").setAttribute("aria-pressed",AU.auto!==false);$("abi").classList.toggle("on",!!AU.savedCon);
+$("adot").className="dot "+(!on?"":AU.savedCon?"ok":AU.error?"ko":AU.n?"wa":"");
+$("atxt").textContent=!on?"Démarre App Hike Connexion":AU.bt===false?"Bluetooth désactivé":AU.savedCon?"Enceinte connectée : "+AU.savedName:AU.error?AU.error:AU.trying?"Essai de "+AU.trying+"…":!AU.n?"Active les enceintes à connecter automatiquement":AU.auto===false?"Connexion automatique désactivée":"En attente d’une enceinte allumée";
+$("art").hidden=!on||!AU.n||!!AU.savedCon;
+const k=JSON.stringify(l);if(k===AK)return;AK=k;let a="";
+for(const d of l){a+='<div class="it">'+(d.rank?'<span class="rk">'+d.rank+'</span>':'<span class="rk no">–</span>')+(d.con?'<button type="button" class="dc" data-adc="'+esc(d.id)+'">Déconnecter</button>':'<button type="button" class="cn" data-acn="'+esc(d.id)+'">Connecter</button>')+'<div><b>'+esc(d.name)+'</b><small>'+(d.con?"connectée":d.try?"essai de connexion…":d.skip?"déconnectée à la main":d.rank?"auto · en attente":"appairée")+'</small></div><button type="button" class="ck" data-atg="'+esc(d.id)+'" aria-pressed="'+(d.rank>0)+'" aria-label="Connexion automatique"></button></div>'}
 $("aul").innerHTML=a||'<div class="em">'+(on?"Aucune enceinte appairée sur ce téléphone.":"Démarre App Hike Connexion pour voir les enceintes.")+'</div>'}
-document.addEventListener("click",e=>{const t=e.target.closest("[data-apk],[data-afg]");if(!t)return;if(t.dataset.apk)A.audioPick(t.dataset.apk);else A.audioForget();AK="";setTimeout(draw,200)});
+document.addEventListener("click",e=>{const t=e.target.closest("[data-atg],[data-adc],[data-acn]");if(!t)return;if(t.dataset.atg)A.audioToggle(t.dataset.atg);else if(t.dataset.adc)A.audioDisconnect(t.dataset.adc);else A.audioConnect(t.dataset.acn);AK="";setTimeout(draw,250)});
 function lists(W){const cs=W.clones||[],hs=W.hist||[],k=JSON.stringify([cs,hs.map(x=>[x.id,x.con,x.cloned])]);if(k===LK)return;LK=k;
 let a="";for(const c of cs)a+='<div class="it"><div><b>'+esc(c.name)+'</b><small>'+(!c.known?"structure inconnue : à connecter une fois par App Hike":(c.src?"source connectée":"source absente, en attente")+(c.adv==="ok"?" · annoncé":c.adv?" · annonce : "+esc(c.adv):""))+'</small></div><button type="button" class="del" data-del="'+esc(c.id)+'">Supprimer</button></div>';
 $("cll").innerHTML=a||'<div class="em">Aucun clone pour l’instant.</div>';
@@ -135,8 +139,8 @@ $("ver").textContent="version "+(S.version||"?");
 const P=S.pont||{};$("pdot").className="dot "+(!P.on?"":P.page?"ok":"wa");
 $("ptxt").textContent=!S.perm?"Autorisation « Appareils à proximité » à accorder":!P.on?"Arrêtée":P.page?"App Hike connectée":"Active, en attente d’App Hike";
 kv($("pkv"),P.on&&P.error?[["Problème",P.error]]:[]);const K=S.kinds||{},AU=S.audio||{};
-const dvk=JSON.stringify([P.on,K,AU.savedName,AU.savedCon,AU.current]);if(dvk!==DK){DK=dvk;const row=(ic,t,v,on)=>'<div class="it'+(on?" on":"")+'">'+IC[ic]+'<div><b>'+t+'</b><small>'+esc(v)+'</small></div></div>';
-$("pdv").innerHTML=row("tm","Tapis",K.tm?"connecté : "+K.tm:P.on?"non connecté":"—",!!K.tm)+row("hr","Ceinture cardio",K.hr?"connectée : "+K.hr:P.on?"non connectée":"—",!!K.hr)+row("au","Connexion audio",AU.current?"connectée : "+AU.current:AU.savedName?AU.savedName+" · non connectée":"aucune enceinte choisie",!!AU.current)}
+const dvk=JSON.stringify([P.on,K,AU.n,AU.current]);if(dvk!==DK){DK=dvk;const row=(ic,t,v,on)=>'<div class="it'+(on?" on":"")+'">'+IC[ic]+'<div><b>'+t+'</b><small>'+esc(v)+'</small></div></div>';
+$("pdv").innerHTML=row("tm","Tapis",K.tm?"connecté : "+K.tm:P.on?"non connecté":"—",!!K.tm)+row("hr","Ceinture cardio",K.hr?"connectée : "+K.hr:P.on?"non connectée":"—",!!K.hr)+row("au","Connexion audio",AU.current?"connectée : "+AU.current:AU.n?(AU.n>1?AU.n+" enceintes en auto":"1 enceinte en auto")+" · non connectée":"aucune enceinte choisie",!!AU.current)}
 auDraw(AU,P);
 $("prun").textContent=!S.perm?"Accorder les autorisations":P.on?"Arrêter App Hike Connexion":"Démarrer App Hike Connexion";if(!S.perm)$("prun").onclick=()=>A.perms();else $("prun").onclick=()=>A.pont(!P.on);
 const W=S.watch||{},on=!!S.watchOn;$("wtog").setAttribute("aria-pressed",on);lists(W);

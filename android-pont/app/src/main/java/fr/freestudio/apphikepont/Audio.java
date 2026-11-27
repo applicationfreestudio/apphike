@@ -44,9 +44,12 @@ class Audio {
             if (BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED.equals(a)) {
                 BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 int s = i.getIntExtra(BluetoothProfile.EXTRA_STATE, -1);
-                if (d != null && d.getAddress().equals(saved())) {
-                    if (s == BluetoothProfile.STATE_CONNECTED) { error = ""; lst.log("♪ enceinte connectée : " + name(d)); }
-                    else if (s == BluetoothProfile.STATE_DISCONNECTED) lst.log("♪ enceinte déconnectée : " + name(d));
+                if (d != null && chosen().contains(d.getAddress())) {
+                    if (s == BluetoothProfile.STATE_CONNECTED) { error = ""; pending = ""; tried = 0; lst.log("♪ enceinte connectée : " + name(d)); }
+                    else if (s == BluetoothProfile.STATE_DISCONNECTED) {
+                        if (d.getAddress().equals(pending)) { pending = ""; h.postDelayed(() -> next(), 1500); }
+                        else { lst.log("♪ enceinte déconnectée : " + name(d)); h.postDelayed(() -> tryConnect(true), 2000); }
+                    }
                 }
                 lst.changed();
             }
@@ -54,32 +57,19 @@ class Audio {
     };
 
     final Runnable loop = new Runnable() { @Override public void run() { tryConnect(false); h.postDelayed(this, 30000); } };
+    /** Device being tried by the automatic connection, and how many chosen speakers were tried in this round. */
+    String pending = ""; int tried = 0;
+    final java.util.Set<String> skip = new java.util.HashSet<>();
 
-    void start() {
-        if (ad == null || on) return;
-        on = true;
-        IntentFilter f = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-        f.addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
-        ctx.registerReceiver(rx, f);
-        try {
-            ad.getProfileProxy(ctx, new BluetoothProfile.ServiceListener() {
-                @Override public void onServiceConnected(int p, BluetoothProfile pr) { a2dp = (BluetoothA2dp) pr; tryConnect(true); lst.changed(); }
-                @Override public void onServiceDisconnected(int p) { a2dp = null; lst.changed(); }
-            }, BluetoothProfile.A2DP);
-        } catch (Exception e) { error = "audio Bluetooth indisponible"; }
-        h.postDelayed(loop, 30000);
+    /** Chosen speakers, in priority order. */
+    List<String> chosen() {
+        List<String> l = new java.util.ArrayList<>();
+        String v = sp.getString("addrs", null);
+        if (v == null) v = sp.getString("addr", "");
+        for (String x : v.split(",")) if (!x.isEmpty() && !l.contains(x)) l.add(x);
+        return l;
     }
-
-    void stop() {
-        if (!on) return;
-        on = false;
-        h.removeCallbacksAndMessages(null);
-        try { ctx.unregisterReceiver(rx); } catch (Exception ignored) { }
-        try { if (a2dp != null) ad.closeProfileProxy(BluetoothProfile.A2DP, a2dp); } catch (Exception ignored) { }
-        a2dp = null;
-    }
-
-    String saved() { return sp.getString("addr", ""); }
+    void saveChosen(List<String> l) { sp.edit().putString("addrs", String.join(",", l)).remove("addr").apply(); }
     boolean auto() { return sp.getBoolean("auto", true); }
     static String name(BluetoothDevice d) { String n = null; try { n = d.getName(); } catch (Exception ignored) { } return n != null ? n : d.getAddress(); }
 
@@ -114,50 +104,105 @@ class Audio {
         }
     }
 
-    /** Remembered speaker paired but not connected: ask the connection (at most every 20 s unless forced). */
+    BluetoothDevice connectedChosen() {
+        for (String x : chosen()) { BluetoothDevice d = dev(x); if (d != null && connected(d)) return d; }
+        return null;
+    }
+
+    /** No chosen speaker connected: try them one after another (the one that answers stays), at most every 20 s unless forced. */
     void tryConnect(boolean force) {
-        if (!on || !auto() || ad == null || !ad.isEnabled()) return;
-        BluetoothDevice d = dev(saved());
-        if (d == null || connected(d)) return;
+        if (!on || !auto() || ad == null || !ad.isEnabled() || a2dp == null) return;
+        if (connectedChosen() != null || !pending.isEmpty()) return;
         long n = System.currentTimeMillis();
         if (!force && n - lastTry < 20000) return;
-        lastTry = n;
-        lst.log("♪ reconnexion de l’enceinte " + name(d) + "…");
-        connect(d);
+        lastTry = n; tried = 0;
+        next();
+    }
+
+    void next() {
+        if (!on || !auto() || connectedChosen() != null) { tried = 0; return; }
+        List<String> c = chosen(); c.removeAll(skip);
+        java.util.List<BluetoothDevice> ds = new java.util.ArrayList<>();
+        for (String x : c) { BluetoothDevice d = dev(x); if (d != null) ds.add(d); }
+        if (tried >= ds.size()) { tried = 0; lst.changed(); return; }
+        BluetoothDevice d = ds.get(tried++);
+        pending = d.getAddress();
+        lst.log("♪ essai de l’enceinte " + name(d) + "…");
+        if (!connect(d)) { pending = ""; tried = ds.size(); }
+        else h.postDelayed(() -> { if (d.getAddress().equals(pending) && !connected(d)) { pending = ""; next(); } }, 12000);
         lst.changed();
     }
 
-    /** Choice from the list: remember it and connect it now. */
-    void choose(String addr) {
-        sp.edit().putString("addr", addr).apply();
+    /** Add to / remove from the speakers connected automatically. */
+    void toggle(String addr) {
+        List<String> l = chosen();
         BluetoothDevice d = dev(addr);
-        if (d != null) { lst.log("♪ enceinte choisie : " + name(d)); if (!connected(d)) connect(d); }
+        if (l.contains(addr)) { l.remove(addr); lst.log("♪ retirée de la connexion auto : " + (d != null ? name(d) : addr)); }
+        else { l.add(addr); skip.remove(addr); lst.log("♪ ajoutée à la connexion auto : " + (d != null ? name(d) : addr)); }
+        saveChosen(l);
+        tryConnect(true);
         lst.changed();
     }
 
-    void forget() { sp.edit().remove("addr").apply(); error = ""; lst.changed(); }
-    void setAuto(boolean a) { sp.edit().putBoolean("auto", a).apply(); if (a) tryConnect(true); lst.changed(); }
+    /** Connect this speaker now (also takes it out of the skipped ones). */
+    void connectNow(String addr) {
+        skip.remove(addr);
+        BluetoothDevice d = dev(addr);
+        BluetoothDevice c = null;
+        if (a2dp != null) for (BluetoothDevice x : a2dp.getConnectedDevices()) if (!x.getAddress().equals(addr)) c = x;
+        if (c != null) disconnect(c);
+        if (d != null) { lst.log("♪ connexion de " + name(d) + "…"); connect(d); }
+        lst.changed();
+    }
+
+    /** Disconnect: not reconnected automatically until chosen again or connected by hand; the next chosen speaker is tried. */
+    void disconnectNow(String addr) {
+        BluetoothDevice d = dev(addr);
+        if (d == null) return;
+        skip.add(addr);
+        lst.log("♪ déconnexion de " + name(d));
+        disconnect(d);
+        lst.changed();
+    }
+
+    boolean disconnect(BluetoothDevice d) {
+        if (a2dp == null) return false;
+        try {
+            Object r = BluetoothA2dp.class.getMethod("disconnect", BluetoothDevice.class).invoke(a2dp, d);
+            if (Boolean.FALSE.equals(r)) { error = "déconnexion refusée par le téléphone : utilise les réglages Bluetooth"; return false; }
+            return true;
+        } catch (Exception e) { error = "ce téléphone ne permet pas de déconnecter l’enceinte depuis l’app : utilise les réglages Bluetooth"; return false; }
+    }
+
+    void setAuto(boolean a) { sp.edit().putBoolean("auto", a).apply(); if (a) { skip.clear(); tryConnect(true); } lst.changed(); }
 
     JSONObject state() {
         JSONObject o = new JSONObject();
         try {
-            String s = saved();
-            BluetoothDevice sd = dev(s);
+            List<String> c = chosen();
+            BluetoothDevice cc = connectedChosen();
             o.put("on", on).put("bt", ad != null && ad.isEnabled()).put("ready", a2dp != null).put("auto", auto()).put("error", error);
-            o.put("saved", s).put("savedName", sd != null ? name(sd) : sp.getString("name", "")).put("savedCon", sd != null && connected(sd)).put("savedBonded", sd != null);
-            if (sd != null) sp.edit().putString("name", name(sd)).apply();
+            o.put("n", c.size()).put("savedCon", cc != null).put("savedName", cc != null ? name(cc) : "");
+            BluetoothDevice pd = dev(pending);
+            o.put("trying", pd != null ? name(pd) : "");
             String cur = "";
             if (a2dp != null) { List<BluetoothDevice> l = a2dp.getConnectedDevices(); if (!l.isEmpty()) cur = name(l.get(0)); }
             o.put("current", cur);
             JSONArray a = new JSONArray();
-            if (ad != null) for (BluetoothDevice d : ad.getBondedDevices()) if (isAudio(d)) a.put(new JSONObject().put("id", d.getAddress()).put("name", name(d)).put("con", connected(d)));
+            if (ad != null) {
+                List<BluetoothDevice> bs = new java.util.ArrayList<>();
+                for (BluetoothDevice d : ad.getBondedDevices()) if (isAudio(d)) bs.add(d);
+                bs.sort((x, y) -> { int i = c.indexOf(x.getAddress()), j = c.indexOf(y.getAddress()); return (i < 0 ? 999 : i) - (j < 0 ? 999 : j); });
+                for (BluetoothDevice d : bs) a.put(new JSONObject().put("id", d.getAddress()).put("name", name(d)).put("con", connected(d))
+                        .put("rank", c.indexOf(d.getAddress()) + 1).put("skip", skip.contains(d.getAddress())).put("try", d.getAddress().equals(pending)));
+            }
             o.put("list", a);
         } catch (Exception ignored) { }
         return o;
     }
 
     String statusText() {
-        BluetoothDevice d = dev(saved());
-        return d != null && connected(d) ? "enceinte " + name(d) : "";
+        BluetoothDevice d = connectedChosen();
+        return d != null ? "enceinte " + name(d) : "";
     }
 }
